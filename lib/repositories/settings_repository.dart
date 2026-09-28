@@ -1,0 +1,86 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../models/device_slot.dart';
+
+class AppSettings {
+  const AppSettings({
+    this.theme = ThemeMode.system,
+    this.demo = false,
+    this.slots = DeviceSlot.defaults,
+  });
+  final ThemeMode theme;
+  final bool demo;
+  final List<DeviceSlot> slots;
+  AppSettings copyWith({
+    ThemeMode? theme,
+    bool? demo,
+    List<DeviceSlot>? slots,
+  }) => AppSettings(
+    theme: theme ?? this.theme,
+    demo: demo ?? this.demo,
+    slots: slots ?? this.slots,
+  );
+  Map<String, dynamic> toJson() => {
+    'theme': theme.name,
+    'demo': demo,
+    'slots': slots.map((s) => s.toJson()).toList(),
+  };
+  factory AppSettings.fromJson(Map<String, dynamic> json) {
+    final raw = json['slots'];
+    final slots = DeviceSlot.defaults.map((slot) {
+      final matches = raw is List
+          ? raw.whereType<Map>().where((s) => s['id'] == slot.id)
+          : <Map>[];
+      if (matches.isEmpty) return slot;
+      final item = matches.first;
+      return DeviceSlot(
+        id: slot.id,
+        name:
+            item['name'] is String && (item['name'] as String).trim().isNotEmpty
+            ? item['name'] as String
+            : slot.name,
+        entityId:
+            item['entityId'] is String &&
+                RegExp(r'^light\.[a-z0-9_]+$').hasMatch(item['entityId'])
+            ? item['entityId'] as String
+            : null,
+      );
+    }).toList();
+    return AppSettings(
+      demo: json['demo'] == true,
+      theme:
+          ThemeMode.values.where((t) => t.name == json['theme']).firstOrNull ??
+          ThemeMode.system,
+      slots: slots,
+    );
+  }
+}
+
+abstract interface class SettingsStore {
+  Future<AppSettings> read();
+  Future<void> write(AppSettings settings);
+}
+
+class SettingsRepository implements SettingsStore {
+  final _preferences = SharedPreferencesAsync();
+  static const _key = 'smartlight.settings';
+  @override
+  Future<AppSettings> read() async {
+    final raw = await _preferences.getString(_key);
+    if (raw == null) return const AppSettings();
+    try {
+      return AppSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } on FormatException {
+      return const AppSettings();
+    } on TypeError {
+      return const AppSettings();
+    }
+  }
+
+  @override
+  Future<void> write(AppSettings settings) =>
+      _preferences.setString(_key, jsonEncode(settings.toJson()));
+}
