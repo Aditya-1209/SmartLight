@@ -12,6 +12,7 @@ import 'color_math.dart';
 import 'crypto_utils.dart';
 import 'device_client.dart';
 import 'tapo_aes.dart';
+import 'tapo_http_client.dart';
 
 /// Tapo KLAP v1/v2. Wire-format references and licenses: THIRD_PARTY_NOTICES.md.
 class KlapCipher {
@@ -56,7 +57,8 @@ class TapoClient implements DeviceClient {
     this.config, {
     http.Client Function()? clientFactory,
     this.timeout = const Duration(seconds: 8),
-  }) : _clientFactory = clientFactory ?? (() => http.Client());
+  }) : _clientFactory =
+           clientFactory ?? (() => TapoHttpClient(timeout: timeout));
   final DeviceConnection config;
   final Duration timeout;
   final http.Client Function() _clientFactory;
@@ -260,7 +262,7 @@ class TapoClient implements DeviceClient {
     if (response.statusCode != 200 || response.bodyBytes.length != 48) {
       // An absent/rejected KLAP endpoint may belong to a legacy AES light.
       // Never downgrade after a valid KLAP challenge fails authentication.
-      if ({200, 403, 404, 405}.contains(response.statusCode)) {
+      if ({200, 400, 403, 404, 405}.contains(response.statusCode)) {
         await _aesHandshake(response);
         return;
       }

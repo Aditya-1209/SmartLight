@@ -53,7 +53,10 @@ class LegacyStrip {
     if (request.url.path == '/app/handshake1') {
       klapAttempts++;
       expect(request.headers.containsKey('Cookie'), false);
-      return http.Response('not supported', klapStatus);
+      return http.Response(
+        klapStatus == 400 ? '' : 'not supported',
+        klapStatus,
+      );
     }
     expect(request.url.path, '/app');
     expect(request.headers['Content-Type'], startsWith('application/json'));
@@ -171,7 +174,7 @@ void main() {
     expect(cipher.decrypt(v['encrypted'] as String), request);
   });
 
-  for (final status in [200, 403, 404, 405]) {
+  for (final status in [200, 400, 403, 404, 405]) {
     test(
       'KLAP HTTP $status legacy response negotiates AES and reuses session',
       () async {

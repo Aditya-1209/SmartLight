@@ -79,7 +79,7 @@ class SettingsScreen extends ConsumerWidget {
         const SizedBox(height: 24),
         const AboutListTile(
           applicationName: 'SmartLight',
-          applicationVersion: '2.0.1',
+          applicationVersion: '2.0.2',
           icon: Icon(Icons.info_outline),
         ),
         SectionCard(
