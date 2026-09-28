@@ -1,4 +1,4 @@
-import json, hashlib, hmac
+import json, hashlib, hmac, base64
 from pathlib import Path
 import tinytuya as t
 from Crypto.Cipher import AES
@@ -21,5 +21,8 @@ clear=b'{"method":"get_device_info"}'
 ct=AES.new(k,AES.MODE_CBC,v[:12]+seqbytes).encrypt(pad(clear,16))
 out['klap']={'local':local.hex(),'remote':remote.hex(),'auth':auth.hex(),'sequence':seq if seq<2**31 else seq-2**32,'clear':clear.decode(),'packet':(hashlib.sha256(sig+seqbytes+ct).digest()+ct).hex()}
 mixed=bytes(a^b for a,b in zip(local,remote));out['session34']=AES.new(key,AES.MODE_ECB).encrypt(mixed).hex();out['session35']=AES.new(key,AES.MODE_GCM,nonce=local[:12]).encrypt(mixed).hex()
+aes_login={'method':'login_device','params':{'username':base64.b64encode(hashlib.sha1(b'test@example.com').hexdigest().encode()).decode(),'password':base64.b64encode(b'test-password').decode()},'requestTimeMils':0}
+aes_clear=json.dumps(aes_login,separators=(',',':'))
+out['tapo_aes']={'key':key.hex(),'iv':local.hex(),'clear':aes_clear,'encrypted':base64.b64encode(AES.new(key,AES.MODE_CBC,local).encrypt(pad(aes_clear.encode(),16))).decode()}
 Path('test/fixtures/protocol_vectors.json').write_text(json.dumps(out,indent=2)+'\n')
 print('Independent packet vectors generated')

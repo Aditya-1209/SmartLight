@@ -65,7 +65,7 @@ class DeviceConnection {
   final int minKelvin, maxKelvin;
   String get entityId => 'light.$slotId';
   String get protocolLabel => brand == DeviceBrand.tapo
-      ? 'Tapo · KLAP'
+      ? 'Tapo · Auto'
       : 'Tuya ${versionText(version)}';
   static String versionText(TuyaVersion version) => switch (version) {
     TuyaVersion.v33 => '3.3',

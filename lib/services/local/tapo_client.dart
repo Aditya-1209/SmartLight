@@ -11,6 +11,7 @@ import '../device_exception.dart';
 import 'color_math.dart';
 import 'crypto_utils.dart';
 import 'device_client.dart';
+import 'tapo_aes.dart';
 
 /// Tapo KLAP v1/v2. Wire-format references and licenses: THIRD_PARTY_NOTICES.md.
 class KlapCipher {
@@ -62,6 +63,8 @@ class TapoClient implements DeviceClient {
   late http.Client _http = _clientFactory();
   final _queue = DeviceQueue();
   KlapCipher? _cipher;
+  TapoAesCipher? _aes;
+  String? _token;
   String? _cookie;
   DateTime? _expires, _authRetryAt;
   bool _disposed = false;
@@ -70,6 +73,7 @@ class TapoClient implements DeviceClient {
     String path,
     List<int> body, {
     Map<String, String>? query,
+    String contentType = 'application/octet-stream',
   }) async {
     if (_disposed) {
       throw const DeviceException(
@@ -88,7 +92,7 @@ class TapoClient implements DeviceClient {
             ),
           )
           ..followRedirects = false
-          ..headers['Content-Type'] = 'application/octet-stream'
+          ..headers['Content-Type'] = contentType
           ..bodyBytes = body;
     if (_cookie != null) request.headers['Cookie'] = _cookie!;
     final response = await _http.send(request).timeout(timeout);
@@ -106,22 +110,161 @@ class TapoClient implements DeviceClient {
     );
   }
 
+  /// Only numeric status/code metadata may reach the UI, never response bodies.
+  String _responseSummary(http.Response response) {
+    int? code;
+    try {
+      final body = jsonDecode(response.body);
+      if (body is Map && body['error_code'] is int) {
+        code = body['error_code'] as int;
+      }
+    } catch (_) {
+      // KLAP success is binary; HTML and non-JSON failures are also possible.
+    }
+    return 'HTTP ${response.statusCode}'
+        '${code == null ? ', ${response.bodyBytes.length} bytes' : ', code $code'}';
+  }
+
+  DeviceException _httpFailure(http.Response response, String stage) {
+    final status = response.statusCode;
+    return DeviceException(
+      status == 401 || status == 403
+          ? DeviceError.unauthorized
+          : DeviceError.server,
+      'Tapo $stage failed (${_responseSummary(response)}). '
+      '${status == 429 ? 'The light is limiting requests. Wait a minute before retrying.' : 'Check the light’s IP and firmware. This response does not establish whether Third-Party Compatibility is enabled.'}',
+    );
+  }
+
+  void _setSession(http.Response response) {
+    final header = response.headers['set-cookie'] ?? '';
+    final match = RegExp(r'TP_SESSIONID=([^;,\s]+)').firstMatch(header);
+    if (match == null) {
+      throw const DeviceException(
+        DeviceError.malformed,
+        'Tapo handshake returned no session cookie. Check the IP and firmware.',
+      );
+    }
+    _cookie = 'TP_SESSIONID=${match.group(1)}';
+    final seconds =
+        int.tryParse(
+          RegExp(r'TIMEOUT=(\d+)').firstMatch(header)?.group(1) ?? '',
+        ) ??
+        86400;
+    _expires = DateTime.now().add(
+      Duration(seconds: (seconds - 60).clamp(1, 86400)),
+    );
+  }
+
+  Map<String, dynamic> _result(Object? data, String stage) {
+    if (data is! Map || data['error_code'] is! int) {
+      throw const FormatException('Invalid Tapo reply.');
+    }
+    final code = data['error_code'] as int;
+    if (code != 0) {
+      final badCredentials = code == -1501 || code == -20601;
+      if (badCredentials) {
+        _authRetryAt = DateTime.now().add(const Duration(minutes: 1));
+      }
+      throw DeviceException(
+        badCredentials ? DeviceError.unauthorized : DeviceError.server,
+        'Tapo $stage was rejected (code $code). '
+        '${badCredentials
+            ? 'Check the owning account email and password, then retry in a minute.'
+            : code == 9999
+            ? 'The session expired. Refresh to reconnect.'
+            : 'Check the light’s firmware compatibility.'}',
+      );
+    }
+    return data['result'] is Map
+        ? Map<String, dynamic>.from(data['result'] as Map)
+        : {};
+  }
+
+  Future<http.Response> _postJson(Map<String, dynamic> data, {String? token}) =>
+      _post(
+        '/app',
+        utf8.encode(jsonEncode(data)),
+        contentType: 'application/json',
+        query: token == null ? null : {'token': token},
+      );
+
+  Future<Map<String, dynamic>> _aesRequest(
+    Map<String, dynamic> data,
+    String stage,
+  ) async {
+    final response = await _postJson({
+      'method': 'securePassthrough',
+      'params': {'request': _aes!.encrypt(data)},
+    }, token: _token);
+    if (response.statusCode != 200) throw _httpFailure(response, stage);
+    final outer = _result(jsonDecode(response.body), stage);
+    if (outer['response'] is! String) {
+      throw const FormatException('Missing encrypted Tapo reply.');
+    }
+    return _result(_aes!.decrypt(outer['response'] as String), stage);
+  }
+
+  Future<void> _aesHandshake(http.Response klapResponse) async {
+    final keys = await TapoAesHandshake.generate();
+    final response = await _postJson({
+      'method': 'handshake',
+      'params': {'key': keys.publicKeyPem, 'requestTimeMils': 0},
+    });
+    Object? data;
+    try {
+      data = jsonDecode(response.body);
+    } catch (_) {
+      // Report both attempts without printing arbitrary device content.
+    }
+    if (response.statusCode != 200 ||
+        data is! Map ||
+        data['error_code'] != 0 ||
+        data['result'] is! Map ||
+        (data['result'] as Map)['key'] is! String) {
+      throw DeviceException(
+        DeviceError.unavailable,
+        'Tapo could not start a supported local session '
+        '(KLAP: ${_responseSummary(klapResponse)}; AES: ${_responseSummary(response)}). '
+        'If Third-Party Compatibility is already enabled, check the IP and firmware version. TPAP-only firmware is not supported.',
+      );
+    }
+    // Credentials are sent only after a valid RSA/AES exchange and cookie.
+    _aes = keys.finish((data['result'] as Map)['key'] as String);
+    _setSession(response);
+    final login = await _aesRequest({
+      'method': 'login_device',
+      'params': TapoAesCipher.loginParams(config.email, config.password),
+      'requestTimeMils': DateTime.now().millisecondsSinceEpoch,
+    }, 'AES login');
+    final token = login['token'];
+    if (token is! String || token.isEmpty) {
+      throw const FormatException('Missing Tapo login token.');
+    }
+    _token = token;
+  }
+
   Future<void> _handshake() async {
     if (_authRetryAt != null && DateTime.now().isBefore(_authRetryAt!)) {
       throw const DeviceException(
         DeviceError.unauthorized,
-        'Tapo authentication failed. Check credentials and Third-Party Compatibility, then retry in a minute.',
+        'Tapo authentication is cooling down. Check the owning account email and password, then retry in a minute.',
       );
     }
     _cookie = null;
+    _token = null;
+    _cipher = null;
+    _aes = null;
     final local = randomBytes(16);
     final response = await _post('/app/handshake1', local);
     if (response.statusCode != 200 || response.bodyBytes.length != 48) {
-      _authRetryAt = DateTime.now().add(const Duration(minutes: 1));
-      throw const DeviceException(
-        DeviceError.unauthorized,
-        'Tapo did not accept a KLAP connection. Enable Third-Party Compatibility in Tapo. Legacy AES and TPAP-only firmware are not supported.',
-      );
+      // An absent/rejected KLAP endpoint may belong to a legacy AES light.
+      // Never downgrade after a valid KLAP challenge fails authentication.
+      if ({200, 403, 404, 405}.contains(response.statusCode)) {
+        await _aesHandshake(response);
+        return;
+      }
+      throw _httpFailure(response, 'KLAP handshake');
     }
     final remote = response.bodyBytes.sublist(0, 16);
     final proof = response.bodyBytes.sublist(16);
@@ -146,31 +289,15 @@ class TapoClient implements DeviceClient {
         'Tapo email or password was rejected by this light. Check account capitalization and the light’s IP address.',
       );
     }
-    final cookieHeader = response.headers['set-cookie'] ?? '';
-    final match = RegExp(r'TP_SESSIONID=([^;,\s]+)').firstMatch(cookieHeader);
-    if (match == null) {
-      throw const FormatException('Missing Tapo session cookie.');
-    }
-    _cookie = 'TP_SESSIONID=${match.group(1)}';
+    _setSession(response);
     final finish = await _post(
       '/app/handshake2',
       sha256([...remote, if (modern) ...local, ...auth]),
     );
     if (finish.statusCode != 200) {
-      throw const DeviceException(
-        DeviceError.unauthorized,
-        'Tapo session was rejected. Check Third-Party Compatibility.',
-      );
+      throw _httpFailure(finish, 'KLAP handshake step 2');
     }
     _cipher = KlapCipher(local, remote, auth);
-    final seconds =
-        int.tryParse(
-          RegExp(r'TIMEOUT=(\d+)').firstMatch(cookieHeader)?.group(1) ?? '',
-        ) ??
-        86400;
-    _expires = DateTime.now().add(
-      Duration(seconds: (seconds - 60).clamp(1, 86400)),
-    );
   }
 
   Future<Map<String, dynamic>> _request(
@@ -178,47 +305,35 @@ class TapoClient implements DeviceClient {
     Map<String, dynamic>? params,
   ]) async {
     try {
-      if (_cipher == null ||
+      if ((_cipher == null && _aes == null) ||
           _expires == null ||
           DateTime.now().isAfter(_expires!)) {
         await _handshake();
       }
+      final request = {
+        'method': method,
+        'requestTimeMils': DateTime.now().millisecondsSinceEpoch,
+        'params': ?params,
+      };
+      if (_aes != null) return await _aesRequest(request, 'AES request');
       final cipher = _cipher!;
-      final body = cipher.encrypt(
-        utf8.encode(
-          jsonEncode({
-            'method': method,
-            'requestTimeMils': DateTime.now().millisecondsSinceEpoch,
-            'params': ?params,
-          }),
-        ),
-      );
+      final body = cipher.encrypt(utf8.encode(jsonEncode(request)));
       final response = await _post(
         '/app/request',
         body,
         query: {'seq': '${cipher.sequence}'},
       );
       if (response.statusCode != 200) {
-        throw const DeviceException(
-          DeviceError.unreachable,
-          'Tapo session expired or the device rejected the request. Refresh to reconnect.',
-        );
+        throw _httpFailure(response, 'KLAP request');
       }
       final data = jsonDecode(utf8.decode(cipher.decrypt(response.bodyBytes)));
-      if (data is! Map || data['error_code'] is! num) {
-        throw const FormatException('Invalid Tapo reply.');
-      }
-      if (data['error_code'] != 0) {
-        throw DeviceException(
-          DeviceError.server,
-          'Tapo rejected the request (code ${data['error_code']}).',
-        );
-      }
-      return data['result'] is Map
-          ? Map<String, dynamic>.from(data['result'] as Map)
-          : {};
+      return _result(data, 'KLAP request');
     } catch (error) {
       _cipher = null;
+      _aes = null;
+      _token = null;
+      _cookie = null;
+      _expires = null;
       _http.close();
       if (!_disposed) _http = _clientFactory();
       if (error is DeviceException) rethrow;
@@ -336,6 +451,9 @@ class TapoClient implements DeviceClient {
   void dispose() {
     _disposed = true;
     _cipher = null;
+    _aes = null;
+    _token = null;
+    _cookie = null;
     _http.close();
   }
 }

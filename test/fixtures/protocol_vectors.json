@@ -14,5 +14,11 @@
     "packet": "d349ae51e75447f4dc04b8ea31650e2121c019db77ad9ecb7731872a89e205709224d06b0c36aaf685b1f0faebfe1aaf728d69d40ef2964b442d3b66f420ca05"
   },
   "session34": "377222e061a924c591cd9c27ea163ed4",
-  "session35": "ed2fd40d0e642b26f836170ad08ba03d"
+  "session35": "ed2fd40d0e642b26f836170ad08ba03d",
+  "tapo_aes": {
+    "key": "30313233343536373839616263646566",
+    "iv": "000102030405060708090a0b0c0d0e0f",
+    "clear": "{\"method\":\"login_device\",\"params\":{\"username\":\"NTY3MTU5ZDYyMmZmYmI1MGIxMWIwZWZkMzA3YmUzNTg2MjRhMjZlZQ==\",\"password\":\"dGVzdC1wYXNzd29yZA==\"},\"requestTimeMils\":0}",
+    "encrypted": "kZedsKQAbkchcksoGDffsVGEdPK7MTnKye7YGgFLkyEPtNzVGA+43ikJdvnhHc+bzzOtCpRX3Oas9f67h1Oc1RjFFkpS4p+gab/XsGKyz/dD2cH4rY4J4qCnJBAvGcIznuw0ljgc/v2brQbMKyb23iH5F235ohAwteMEiC87ZYrfFVBvbU5xCIWMsjPK4VBRbbi2+YkHTUeTbi6TACveCOqs7hakGt03IS7iN2yvYMA="
+  }
 }

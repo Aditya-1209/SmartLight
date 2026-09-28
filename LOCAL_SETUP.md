@@ -11,7 +11,7 @@ SmartLight 2 talks to lights from the phone or computer running the app. Home As
 5. Choose **Test connection**, then **Connect & save**. This checks the light without changing its power or color. You can use just this strip while the battens remain unconfigured.
 6. Return to My Room. Try power, brightness and color. The app reads device state after each command and every five seconds in the foreground.
 
-The direct Tapo adapter implements KLAP v1/v2. Legacy RSA/AES passthrough and TPAP-only firmware are not implemented. If the device refuses KLAP, check Third-Party Compatibility first; an unsupported firmware error is not proof that the password is wrong. Authentication failures have a one-minute cooldown. No credentials are sent to a SmartLight server.
+SmartLight tries KLAP v1/v2 first, then legacy RSA/AES passthrough (login v1) when the KLAP endpoint rejects the handshake. It never falls back after a valid KLAP challenge fails password verification. TPAP-only firmware and AES login v2 are not implemented. A rejected handshake does not prove that Third-Party Compatibility is disabled: errors include the connection stage, HTTP status and any numeric device error code. Account login failures have a one-minute cooldown per connection. No credentials are sent to a SmartLight server.
 
 Capabilities come from the device response. Some L920 firmware reports a fixed white range (for example 9000–9000 K); SmartLight hides the temperature slider in that case. RGB white is available in color presets. Unsupported scene parameters are skipped. Addressable effects/music are not exposed; manual changes disable the strip's active lighting effect.
 
@@ -39,7 +39,7 @@ If SB22240 cannot be linked/exported through a supported account, or exposes dif
 
 ## Android's narrow HTTP exception
 
-Tapo uses encrypted KLAP messages over HTTP on port 80. Android release builds default to denying HTTP. Build with `SMARTLIGHT_TAPO_IP` to allow **only your strip's private IPv4 address**. The generated exception stays in ignored build output; your address is not committed. Runtime destinations are also restricted to literal private/link-local IPv4 addresses and redirects are refused.
+Tapo uses encrypted KLAP or legacy AES messages over HTTP on port 80. Android release builds default to denying HTTP. Build with `SMARTLIGHT_TAPO_IP` to allow **only your strip's private IPv4 address**. The generated exception stays in ignored build output; your address is not committed. Runtime destinations are also restricted to literal private/link-local IPv4 addresses and redirects are refused.
 
 ```sh
 # Replace this example with your strip's address.
@@ -52,7 +52,8 @@ The optional Dart define prefills the address in setup. If the strip changes add
 ## Troubleshooting
 
 - **Cannot reach device:** same LAN, correct reserved IP, power on, local-network permission granted, no client isolation/VPN route interference. A device being visible in its cloud app does not prove that the LAN connection is reachable.
-- **Tapo login rejected:** check account owner, capitalization and Third-Party Compatibility. Do not keep guessing credentials; wait for the cooldown.
+- **Tapo handshake rejected with compatibility already enabled:** verify the IP under Tapo → Device Info and note the firmware version. SmartLight 2.0.1 reports separate KLAP/AES statuses; the old generic compatibility message does not identify the cause.
+- **Tapo account login rejected:** check account owner and capitalization. Do not keep guessing credentials; wait for the cooldown.
 - **Wipro decode/authentication failure:** check the exact local key and protocol version. A Wipro password is not a local key.
 - **Wrong Wipro profile:** choose the profile whose datapoints match the device. A successful connection still needs the physical checks in REAL_DEVICE_TESTING.md.
 - **One light offline:** other connected lights remain usable; room actions report failures by light.

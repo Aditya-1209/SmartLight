@@ -1,13 +1,13 @@
 # Direct-control validation record
 
-Date: 2026-09-28. SmartLight 2.0 replaces the Home Assistant backend with in-app Tapo/Tuya LAN clients.
+Date: 2026-09-28. SmartLight 2.0.1 adds legacy Tapo AES (login v1) and fixes misleading handshake errors. The 2.0 release replaced Home Assistant with in-app Tapo/Tuya LAN clients.
 
 ## Automated checks
 
 - Flutter 3.47.5 / Dart 3.13.4 on macOS 27, Apple Silicon, Xcode 27.
 - `flutter analyze`: no issues.
-- `flutter test --coverage`: **44 tests passed**, **1,642 / 1,840 executable lines (89.2%)**.
-- Tests cover independent KLAP and Tuya packet vectors, KLAP v1/v2 logins, authentication cooldown, timeouts and redaction; Tuya 3.3/3.4/3.5 TCP negotiation/read/command round trips against simulated lights; integrity failures, bounded fragmented frame parsing, modern/legacy light mapping and RGB-mode brightness; partial room failures, foreground lifecycle, credential persistence, concurrent setup saves, demo controls, scenes, and responsive widgets.
+- `flutter test --coverage`: **58 tests passed**, **1,753 / 1,948 executable lines (90.0%)**.
+- Tests cover independent KLAP and Tuya packet vectors, KLAP v1/v2 logins, AES RSA exchange/login/read/command/session reuse, independent Python AES login bytes, protocol selection after rejected KLAP endpoints, safe HTTP/device-code diagnostics, no fallback on a failed KLAP proof, no command replay, authentication cooldown, timeouts and redaction; Tuya 3.3/3.4/3.5 TCP negotiation/read/command round trips against simulated lights; integrity failures, bounded fragmented frame parsing, modern/legacy light mapping and RGB-mode brightness; partial room failures, foreground lifecycle, credential persistence, concurrent setup saves, demo controls, scenes, and responsive widgets.
 - Protocol golden bytes were generated outside Dart with TinyTuya 1.20.0 and PyCryptodome. `tool/generate_protocol_vectors.py` reproduces them. The app has no Python runtime dependency.
 - UI tests use 412×915, 1280×720 and 1920×1080 viewports. A setup queue initialization problem found by widget tests was corrected.
 - `git diff --check`: pass. Credential-pattern scan found no access tokens or private keys in changed code/docs. Fixtures use explicit fake credentials.
@@ -16,21 +16,21 @@ Date: 2026-09-28. SmartLight 2.0 replaces the Home Assistant backend with in-app
 
 | Check | Result |
 | --- | --- |
-| macOS release build | Passed (45.4 MB); app rebuilt after final code changes |
-| Native macOS integration tests | 2 passed: isolated Keychain/preferences probe and demo setup → power → brightness → RGB → Movie |
-| Android ARM64 release for Pixel 8 | Passed (19.3 MB), version 2.0.0 / build 2 |
+| macOS release build | 2.0.1 passed (46.5 MB), bundle version 3 |
+| Native macOS integration tests | 2.0 baseline: 2 passed: isolated Keychain/preferences probe and demo setup → power → brightness → RGB → Movie |
+| Android ARM64 release for Pixel 8 | 2.0.1 passed (19.5 MB), version 2.0.1 / build 3 |
 | APK network security resource inspection | Confirmed: base HTTP denied; exactly one private strip IP exception, no subdomains |
 | Windows release | Built by GitHub Actions; see the Actions run for this commit |
 
 Android's generated resource uses the current Gradle variant API; the initial obsolete SourceSet API attempt was corrected. The packaged APK (including the manifest's resource reference) was inspected with aapt2, not just the generated XML. Native integration used fake lights and removed its isolated storage probe. The runner emitted a foreground warning but both native tests completed successfully.
 
-Source implementation: `3cd5a04`. GitHub Actions validates the final documentation commit with all three platform builds; consult the [Actions page](https://github.com/Aditya-1209/SmartLight/actions) for the exact run and artifacts.
+Baseline implementation: `3cd5a04`. Every push runs analysis, tests and all three platform builds; consult the [Actions page](https://github.com/Aditya-1209/SmartLight/actions) for the run and artifacts matching the latest commit.
 
 ## Physical verification and limitations
 
-**No successful physical light connection or command has been verified.** A read-only handshake to the user-provided Tapo IP could not be reached from this Mac. No real Tapo password or Wipro local key was available or requested in chat.
+**No successful physical light connection or command has been verified.** A read-only handshake to the user-provided Tapo IP could not be reached from this Mac. The user reports enabling Third-Party Compatibility; the previous generic error was not evidence that it was disabled. Read-only probes from the terminal still could not connect to port 80, so the strip’s actual protocol remains unconfirmed. No real Tapo password or Wipro local key was read or requested in chat.
 
-Wipro SB22240 compatibility, the Wipro Next-to-Tuya key provisioning route, exact datapoints and white range remain unverified. Tapo legacy AES/TPAP-only firmware and Tuya 3.1/3.2/custom datapoints are not implemented. Automated protocol compatibility does not establish firmware compatibility.
+Wipro SB22240 compatibility, the Wipro Next-to-Tuya key provisioning route, exact datapoints and white range remain unverified. Tapo TPAP-only firmware, AES login v2 and Tuya 3.1/3.2/custom datapoints are not implemented. Automated protocol compatibility does not establish firmware compatibility.
 
 The app needs the lights' LAN addresses and credentials, but no Home Assistant, Docker, hub or server. Connections stop in the background. Vendor apps still handle initial pairing and firmware; the lack of a SmartLight cloud dependency does not guarantee every vendor device's firmware works indefinitely without internet.
 

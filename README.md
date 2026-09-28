@@ -8,7 +8,7 @@ The intended room contains two Wipro SB22240 RGB/CCT battens and a Tapo L920 str
 
 ```text
 SmartLight on phone / Mac / Windows
-  ├─ Tapo: local HTTP with authenticated KLAP encryption
+  ├─ Tapo: local HTTP with KLAP or legacy AES encryption
   ├─ Wipro/Tuya batten 1: encrypted local TCP
   └─ Wipro/Tuya batten 2: encrypted local TCP
 ```
@@ -26,10 +26,10 @@ The device running SmartLight is the controller. Connections and five-second pol
 
 | Device family | Implemented | Setup required |
 |---|---|---|
-| Tapo | KLAP v1/v2, power, brightness, HSV/RGB, adjustable CCT where reported | Light IP + owning Tapo account email/password; Third-Party Compatibility where offered |
+| Tapo | KLAP v1/v2 or legacy AES (login v1), power, brightness, HSV/RGB, adjustable CCT where reported | Light IP + owning Tapo account email/password; Third-Party Compatibility where offered |
 | Compatible Wipro/Tuya Wi-Fi lights | LAN 3.3/3.4/3.5; modern DP20–24 and legacy DP1–5 profiles | IP + device ID + local key + actual protocol/profile |
 
-Tapo legacy AES/TPAP-only firmware, Tuya 3.1/3.2, vendor effects, music synchronization and arbitrary datapoint profiles are not supported. The SB22240 profile and key-export path must be verified on the real hardware. A Wipro Next password alone will not connect a batten.
+Tapo TPAP-only firmware, AES login v2, Tuya 3.1/3.2, vendor effects, music synchronization and arbitrary datapoint profiles are not supported. The SB22240 profile and key-export path must be verified on the real hardware. A Wipro Next password alone will not connect a batten.
 
 ## Run
 
@@ -66,7 +66,7 @@ GitHub Actions runs analysis/tests and builds Android debug, macOS release and W
 
 ## Code structure and security
 
-`lib/services/local/` owns encryption, framing, device transports and capability mapping. `LocalLightsRepository` combines independent connections; Riverpod manages room state and actions. Device operations are serialized to prevent polling/command races. Packet parsing bounds input sizes and verifies CRC/HMAC/GCM or KLAP signatures. Tuya 3.3's protocol uses weaker legacy integrity; use a trusted home LAN.
+`lib/services/local/` owns encryption, framing, device transports and capability mapping. `LocalLightsRepository` combines independent connections; Riverpod manages room state and actions. Device operations are serialized to prevent polling/command races. Packet parsing bounds input sizes and verifies CRC/HMAC/GCM or KLAP signatures. Legacy Tapo AES and Tuya 3.3 have weaker security than KLAP and modern Tuya protocols; use a trusted home LAN.
 
 Credentials and local connection details are stored in platform secure storage. Only appearance/demo preferences and legacy non-sensitive slot data use preferences. Passwords/keys are masked and omitted from diagnostics/errors. Private/link-local IPv4 literals only; no public endpoints, arbitrary URLs or HTTP redirects. Never commit device exports, passwords or local keys. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for protocol references and licenses.
 
