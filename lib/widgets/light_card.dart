@@ -44,7 +44,7 @@ class LightCard extends StatelessWidget {
                   Expanded(
                     child: StatusBadge(
                       light == null
-                          ? 'Not mapped'
+                          ? 'Not set up'
                           : light!.available
                           ? 'Online'
                           : 'Unavailable',
@@ -108,9 +108,9 @@ class LightCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 light == null
-                    ? 'Choose an entity in Settings'
+                    ? 'Add this light in Settings'
                     : !light!.available
-                    ? 'Check the device in Home Assistant'
+                    ? 'Check power, Wi-Fi and Settings'
                     : '${on ? 'On' : 'Off'}${light!.supportsBrightness ? ' · ${light!.brightnessPercent}%' : ''}',
               ),
               const SizedBox(height: 12),

@@ -10,10 +10,11 @@ import '../models/light_entity.dart';
 import '../models/scene.dart';
 import '../repositories/lights_repository.dart';
 import '../repositories/settings_repository.dart';
-import '../services/ha_exception.dart';
-import '../services/home_assistant_websocket.dart';
-import '../services/mock_home_assistant.dart';
+import '../services/device_exception.dart';
+import '../services/connection_status.dart';
+import '../services/demo_lights.dart';
 import '../services/secure_storage_service.dart';
+import '../services/local/device_client.dart';
 
 final credentialStoreProvider = Provider<CredentialStore>(
   (ref) => SecureStorageService(),
@@ -27,8 +28,7 @@ typedef BackendFactory = LightsRepository Function(
 );
 final backendFactoryProvider = Provider<BackendFactory>(
   (ref) =>
-      (config, demo) =>
-          demo ? MockHomeAssistant() : HomeAssistantRepository(config!),
+      (config, demo) => demo ? DemoLights() : LocalLightsRepository(config!),
 );
 final appControllerProvider = NotifierProvider<AppController, AppState>(
   AppController.new,
@@ -42,7 +42,7 @@ class AppState {
     this.busy = const {},
     this.loading = false,
     this.connected = false,
-    this.realtime = RealtimeStatus.disconnected,
+    this.realtime = ConnectionStatus.disconnected,
     this.lastRefresh,
     this.error,
   });
@@ -52,12 +52,22 @@ class AppState {
   final Set<String> busy;
   final bool loading;
   final bool connected;
-  final RealtimeStatus realtime;
+  final ConnectionStatus realtime;
   final DateTime? lastRefresh;
   final String? error;
-  bool get configured => settings.demo || config != null;
-  List<DeviceSlot> get slots =>
-      settings.demo ? DeviceSlot.demo : settings.slots;
+  bool get configured => settings.demo || (config?.devices.isNotEmpty ?? false);
+  List<DeviceSlot> get slots => settings.demo
+      ? DeviceSlot.demo
+      : DeviceSlot.defaults.map((slot) {
+          final device = config?.devices
+              .where((d) => d.slotId == slot.id)
+              .firstOrNull;
+          return DeviceSlot(
+            id: slot.id,
+            name: device?.name ?? slot.name,
+            entityId: device?.entityId,
+          );
+        }).toList();
   LightEntity? lightFor(DeviceSlot slot) => lights[slot.entityId];
   AppState copyWith({
     AppSettings? settings,
@@ -66,7 +76,7 @@ class AppState {
     Set<String>? busy,
     bool? loading,
     bool? connected,
-    RealtimeStatus? realtime,
+    ConnectionStatus? realtime,
     DateTime? lastRefresh,
     String? error,
     bool clearError = false,
@@ -96,19 +106,21 @@ class ActionReport {
   String get message => failed.isNotEmpty
       ? failed.entries.map((e) => '${e.key}: ${e.value}').join(' • ')
       : succeeded.isEmpty
-      ? 'No compatible mapped lights.'
+      ? 'No compatible connected lights.'
       : '${succeeded.length} ${succeeded.length == 1 ? 'light' : 'lights'} updated${skipped.isEmpty ? '.' : '; ${skipped.length} unsupported skipped.'}';
 }
 
 class AppController extends Notifier<AppState> {
   LightsRepository? _backend;
   StreamSubscription<LightEntity>? _updates;
-  StreamSubscription<RealtimeStatus>? _statuses;
+  StreamSubscription<ConnectionStatus>? _statuses;
   Timer? _fallbackRefresh;
   int _generation = 0;
   bool _disposed = false;
+  bool _foreground = true;
   Future<void>? _initialization;
   final Map<String, int> _revisions = {};
+  final _configurationQueue = DeviceQueue();
   @override
   AppState build() {
     ref.onDispose(() {
@@ -149,11 +161,11 @@ class AppController extends Notifier<AppState> {
 
   Future<void> _attach() async {
     _detach();
-    if (!state.configured) {
+    if (!state.configured || !_foreground) {
       state = state.copyWith(
         lights: {},
         connected: false,
-        realtime: RealtimeStatus.disconnected,
+        realtime: ConnectionStatus.disconnected,
       );
       return;
     }
@@ -177,16 +189,14 @@ class AppController extends Notifier<AppState> {
       if (_disposed || generation != _generation) return;
       state = state.copyWith(
         realtime: status,
-        error: status == RealtimeStatus.unauthorized
-            ? 'Realtime authentication failed. Update your token in Settings.'
+        error: status == ConnectionStatus.unauthorized
+            ? 'A light rejected its credentials. Check Settings.'
             : null,
       );
-      if (status == RealtimeStatus.connected) unawaited(refresh());
     });
     backend.start();
-    // Restore state missed during a socket outage, and retain REST-only usability.
-    _fallbackRefresh = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (state.realtime != RealtimeStatus.connected) unawaited(refresh());
+    _fallbackRefresh = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (state.busy.isEmpty) unawaited(refresh());
     });
     await refresh(force: true);
   }
@@ -201,7 +211,7 @@ class AppController extends Notifier<AppState> {
       final lights = await backend.getLights();
       if (_disposed || generation != _generation) return;
       final merged = {for (final light in lights) light.entityId: light};
-      // A newer WebSocket event wins over a REST snapshot already in flight.
+      // A newer command/event wins over a poll already in flight.
       for (final entry in state.lights.entries) {
         if ((_revisions[entry.key] ?? 0) != (versions[entry.key] ?? 0)) {
           merged[entry.key] = entry.value;
@@ -210,9 +220,14 @@ class AppController extends Notifier<AppState> {
       state = state.copyWith(
         lights: merged,
         loading: false,
-        connected: true,
-        lastRefresh: DateTime.now(),
-        clearError: state.realtime != RealtimeStatus.unauthorized,
+        connected: merged.values.any((light) => light.available),
+        lastRefresh: merged.values.any((light) => light.available)
+            ? DateTime.now()
+            : null,
+        error: merged.values.any((light) => light.available)
+            ? null
+            : 'No lights reachable. Check your Wi-Fi and device settings.',
+        clearError: merged.values.any((light) => light.available),
       );
     } catch (error) {
       if (!_disposed && generation == _generation) {
@@ -225,41 +240,53 @@ class AppController extends Notifier<AppState> {
     }
   }
 
-  Future<List<LightEntity>> inspectConnection(ConnectionConfig config) async {
-    final backend = ref.read(backendFactoryProvider)(config, false);
+  Future<LightEntity> inspectDevice(DeviceConnection device) async {
+    final backend = ref.read(backendFactoryProvider)(
+      ConnectionConfig([device]),
+      false,
+    );
     try {
-      await backend.testConnection();
-      return await backend.getLights();
+      return await backend.getLight(device.entityId);
     } finally {
       backend.dispose();
     }
   }
 
-  Future<void> saveConfiguration(
-    ConnectionConfig config,
-    List<DeviceSlot> slots,
-  ) async {
-    final validation = DeviceSlot.validate(slots);
-    if (validation != null) throw HaException(HaError.invalidUrl, validation);
-    final lights = await inspectConnection(config);
-    if (slots.any(
-      (slot) => !lights.any((light) => light.entityId == slot.entityId),
-    )) {
-      throw const HaException(
-        HaError.unavailable,
-        'A selected entity is missing. Test the connection and map again.',
+  Future<void> saveDevice(DeviceConnection device) =>
+      _configurationQueue.run(() => _saveDevice(device));
+  Future<void> _saveDevice(DeviceConnection device) async {
+    final devices = [
+      ...?state.config?.devices.where((d) => d.slotId != device.slotId),
+      device,
+    ];
+    final config = ConnectionConfig(devices);
+    final light = await inspectDevice(device);
+    if (!light.available) {
+      throw const DeviceException(
+        DeviceError.unavailable,
+        'The light did not report a usable state.',
       );
     }
-    final settings = state.settings.copyWith(
-      demo: false,
-      slots: List.unmodifiable(slots),
+    await _saveConfig(config);
+  }
+
+  Future<void> removeDevice(String slotId) =>
+      _configurationQueue.run(() => _removeDevice(slotId));
+  Future<void> _removeDevice(String slotId) async {
+    final config = ConnectionConfig(
+      state.config?.devices.where((d) => d.slotId != slotId).toList() ?? [],
     );
+    await _saveConfig(config);
+  }
+
+  Future<void> _saveConfig(ConnectionConfig config) async {
+    final settings = state.settings.copyWith(demo: false);
     try {
       await ref.read(credentialStoreProvider).write(config);
       await ref.read(settingsStoreProvider).write(settings);
     } catch (_) {
-      throw const HaException(
-        HaError.storage,
+      throw const DeviceException(
+        DeviceError.storage,
         'Could not save securely. Check your system keychain and storage permissions.',
       );
     }
@@ -270,6 +297,22 @@ class AppController extends Notifier<AppState> {
       clearError: true,
     );
     await _attach();
+  }
+
+  Future<void> setForeground(bool foreground) async {
+    if (_disposed) return;
+    _foreground = foreground;
+    if (foreground) {
+      if (_backend == null && state.configured) await _attach();
+    } else {
+      _detach();
+      state = state.copyWith(
+        loading: false,
+        connected: false,
+        busy: {},
+        realtime: ConnectionStatus.disconnected,
+      );
+    }
   }
 
   Future<void> setDemo(bool value) async {
@@ -316,7 +359,7 @@ class AppController extends Notifier<AppState> {
         final light = state.lightFor(slot);
         final command = commands[slot.id]!;
         if (backend == null || light == null) {
-          failed[slot.name] = 'Not mapped or not found.';
+          failed[slot.name] = 'Not set up.';
           return;
         }
         if (!light.available) {
@@ -329,6 +372,7 @@ class AppController extends Notifier<AppState> {
         }
         try {
           await backend.command(light, command);
+          _revisions[light.entityId] = (_revisions[light.entityId] ?? 0) + 1;
           final revision = _revisions[light.entityId] ?? 0;
           final updated = await backend.getLight(light.entityId);
           if (!_disposed &&
@@ -352,14 +396,14 @@ class AppController extends Notifier<AppState> {
 
   void setDemoAvailability(DeviceSlot slot, bool available) {
     final backend = _backend;
-    if (backend is MockHomeAssistant && slot.entityId != null) {
+    if (backend is DemoLights && slot.entityId != null) {
       backend.setAvailable(slot.entityId!, available);
     }
   }
 
   Future<void> setDemoOffline(bool value) async {
     final backend = _backend;
-    if (backend is MockHomeAssistant) {
+    if (backend is DemoLights) {
       backend.setOffline(value);
       await refresh();
     }

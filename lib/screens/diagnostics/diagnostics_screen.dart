@@ -26,12 +26,12 @@ class DiagnosticsScreen extends ConsumerWidget {
               Text('Connection', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 12),
               SelectableText(
-                'Home Assistant: ${state.settings.demo ? 'Demo backend' : state.config?.url ?? 'Not configured'}',
+                'Connection: ${state.settings.demo ? 'Demo lights' : 'Direct to lights over room Wi-Fi'}',
               ),
               Text(
-                'REST: ${state.connected ? 'Connected' : 'Offline / not connected'}',
+                'Room: ${state.connected ? 'Connected' : 'Offline / not connected'}',
               ),
-              Text('WebSocket: ${state.realtime.name}'),
+              const Text('Refreshes every 5 seconds while the app is open.'),
               Text(
                 'Last successful refresh: ${state.lastRefresh?.toLocal().toString().split('.').first ?? 'Never'}',
               ),
@@ -46,7 +46,7 @@ class DiagnosticsScreen extends ConsumerWidget {
               if (state.settings.demo)
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Simulate server offline'),
+                  title: const Text('Simulate room offline'),
                   value: !state.connected,
                   onChanged: state.loading
                       ? null
@@ -76,7 +76,9 @@ class DiagnosticsScreen extends ConsumerWidget {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 12),
-                    SelectableText('Entity: ${slot.entityId ?? 'Not mapped'}'),
+                    SelectableText('Device: ${slot.entityId ?? 'Not set up'}'),
+                    if (light?.rawAttributes['connection_error'] is String)
+                      Text(light!.rawAttributes['connection_error'] as String),
                     Text('Available: ${light?.available ?? false}'),
                     Text('Power: ${light?.state ?? 'Unknown'}'),
                     Text(

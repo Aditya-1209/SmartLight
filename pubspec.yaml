@@ -1,5 +1,5 @@
 name: smart_light
-description: "A local-first room lighting controller powered by Home Assistant."
+description: "Control your room lights directly over Wi-Fi."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 2.0.0+2
 
 environment:
   sdk: ^3.13.4
@@ -36,7 +36,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_riverpod: ^3.4.3
   http: ^1.6.0
-  web_socket_channel: ^3.0.3
+  crypto: ^3.0.7
+  pointycastle: ^4.0.0
   flutter_secure_storage: ^11.2.0
   shared_preferences: ^2.5.5
 
@@ -63,6 +64,8 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  assets:
+    - THIRD_PARTY_NOTICES.md
 
   # To add assets to your application, add an assets section, like this:
   # assets:

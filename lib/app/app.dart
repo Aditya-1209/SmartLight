@@ -6,7 +6,7 @@ import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/diagnostics/diagnostics_screen.dart';
 import '../screens/scenes/scenes_screen.dart';
 import '../screens/settings/settings_screen.dart';
-import '../services/home_assistant_websocket.dart';
+import '../services/connection_status.dart';
 import 'theme.dart';
 
 class SmartLightApp extends ConsumerWidget {
@@ -55,7 +55,11 @@ class _AppShellState extends ConsumerState<AppShell>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      ref.read(appControllerProvider.notifier).refresh();
+      ref.read(appControllerProvider.notifier).setForeground(true);
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      ref.read(appControllerProvider.notifier).setForeground(false);
     }
   }
 
@@ -186,7 +190,7 @@ class _AppShellState extends ConsumerState<AppShell>
                               state.settings.demo
                                   ? 'Demo workspace'
                                   : state.connected
-                                  ? 'Home Assistant'
+                                  ? 'Direct Wi-Fi'
                                   : 'Not connected',
                               style: Theme.of(context).textTheme.labelMedium,
                             ),
@@ -232,14 +236,14 @@ class _AppShellState extends ConsumerState<AppShell>
                       ),
                     ),
                   if (state.configured &&
-                      state.realtime != RealtimeStatus.connected &&
+                      state.realtime != ConnectionStatus.connected &&
                       state.error == null)
                     Container(
                       width: double.infinity,
                       color: scheme.secondaryContainer,
                       padding: const EdgeInsets.all(12),
                       child: Text(
-                        'Live updates: ${state.realtime.name}. Manual refresh is available.',
+                        'Some lights are unavailable. Check their power, Wi-Fi and settings.',
                         textAlign: TextAlign.center,
                       ),
                     ),

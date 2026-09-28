@@ -3,303 +3,53 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/connection_config.dart';
 import '../../models/device_slot.dart';
-import '../../models/light_entity.dart';
 import '../../providers/app_controller.dart';
-import '../../services/ha_exception.dart';
+import '../../services/device_exception.dart';
 import '../../widgets/common.dart';
 
-class SettingsScreen extends ConsumerStatefulWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
   @override
-  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  late final TextEditingController _url;
-  late final TextEditingController _token;
-  late final List<TextEditingController> _names;
-  late List<DeviceSlot> _slots;
-  List<LightEntity> _discovered = [];
-  bool _working = false;
-  bool _showToken = false;
-  String? _message;
-  bool _success = false;
-  @override
-  void initState() {
-    super.initState();
-    final state = ref.read(appControllerProvider);
-    _url = TextEditingController(text: state.config?.url ?? '');
-    _token = TextEditingController(text: state.config?.token ?? '');
-    _slots = List.of(state.settings.slots);
-    _names = _slots.map((s) => TextEditingController(text: s.name)).toList();
-    if (!state.settings.demo) _discovered = state.lights.values.toList();
-    _url.addListener(_invalidate);
-    _token.addListener(_invalidate);
-  }
-
-  void _invalidate() {
-    setState(() {
-      _discovered = [];
-      _message = null;
-    });
-  }
-
-  @override
-  void dispose() {
-    _url.dispose();
-    _token.dispose();
-    for (final c in _names) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  Future<void> _test() async {
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _working = true;
-      _message = null;
-    });
-    try {
-      final lights = await ref
-          .read(appControllerProvider.notifier)
-          .inspectConnection(ConnectionConfig(_url.text, _token.text));
-      if (!mounted) return;
-      setState(() {
-        _discovered = lights;
-        _success = true;
-        _message =
-            'Connected. Found ${lights.length} light entities. Map your devices below.';
-      });
-    } catch (error) {
-      if (mounted) {
-        setState(() {
-          _success = false;
-          _message = userMessage(error);
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _working = false);
-    }
-  }
-
-  Future<void> _save() async {
-    setState(() {
-      _working = true;
-      _message = null;
-    });
-    try {
-      final slots = [
-        for (var i = 0; i < _slots.length; i++)
-          _slots[i].copyWith(name: _names[i].text.trim()),
-      ];
-      await ref
-          .read(appControllerProvider.notifier)
-          .saveConfiguration(ConnectionConfig(_url.text, _token.text), slots);
-      if (mounted) {
-        setState(() {
-          _success = true;
-          _message = 'Saved securely. Your room is ready.';
-        });
-      }
-    } catch (error) {
-      if (mounted) {
-        setState(() {
-          _success = false;
-          _message = userMessage(error);
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _working = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(appControllerProvider);
     final controller = ref.read(appControllerProvider.notifier);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        PageHeading(
-          state.config == null ? 'Let’s connect' : 'Settings',
-          'A single connection. All your lights.',
+        const PageHeading(
+          'Settings',
+          'Your lights. Your Wi-Fi. Ready when you are.',
         ),
-        SectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.hub_outlined),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Home Assistant',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Add your lights to Home Assistant first, then create a long-lived access token in your Home Assistant profile.',
-              ),
-              const SizedBox(height: 24),
-              TextField(
-                key: const ValueKey('ha-url'),
-                controller: _url,
-                enabled: !_working,
-                keyboardType: TextInputType.url,
-                autocorrect: false,
-                decoration: const InputDecoration(
-                  labelText: 'Home Assistant URL',
-                  hintText: 'http://192.168.1.10:8123',
-                  prefixIcon: Icon(Icons.link),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                key: const ValueKey('ha-token'),
-                controller: _token,
-                enabled: !_working,
-                obscureText: !_showToken,
-                autocorrect: false,
-                enableSuggestions: false,
-                decoration: InputDecoration(
-                  labelText: 'Long-lived access token',
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  suffixIcon: IconButton(
-                    tooltip: _showToken ? 'Hide token' : 'Show token',
-                    onPressed: () => setState(() => _showToken = !_showToken),
-                    icon: Icon(
-                      _showToken
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Credentials are stored in your operating system’s secure storage. Use HTTPS when connecting outside a trusted LAN.',
-              ),
-              const SizedBox(height: 20),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: _working ? null : _test,
-                    icon: const Icon(Icons.network_check),
-                    label: const Text('Test connection'),
-                  ),
-                  FilledButton.icon(
-                    onPressed: _working || _discovered.isEmpty ? null : _save,
-                    icon: const Icon(Icons.check),
-                    label: const Text('Save'),
-                  ),
-                  if (_working)
-                    const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                ],
-              ),
-              if (_message != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      _message!,
-                      style: TextStyle(
-                        color: _success
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-        SectionCard(
+        const SectionCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Device mapping',
-                style: Theme.of(context).textTheme.titleLarge,
+                'Connect directly',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Choose a unique light for each slot. Names can be edited here anytime.',
+              SizedBox(height: 12),
+              Text(
+                'Keep the lights powered and join the same Wi-Fi. Add one light at a time; the rest can wait. Only the device running SmartLight needs to be on.',
               ),
-              if (_discovered.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 20),
-                  child: Text(
-                    'Test your connection to discover available light entities.',
-                  ),
-                ),
-              for (var i = 0; i < _slots.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(top: 20),
-                  child: Column(
-                    children: [
-                      TextField(
-                        controller: _names[i],
-                        enabled: !_working,
-                        decoration: InputDecoration(
-                          labelText:
-                              '${DeviceSlot.defaults[i].name} · app name',
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        key: ValueKey(
-                          'mapping-$i-${_slots[i].entityId}-${_discovered.length}',
-                        ),
-                        initialValue:
-                            _discovered.any(
-                              (e) => e.entityId == _slots[i].entityId,
-                            )
-                            ? _slots[i].entityId
-                            : null,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Home Assistant entity',
-                        ),
-                        items: _discovered
-                            .map(
-                              (e) => DropdownMenuItem(
-                                value: e.entityId,
-                                child: Text(
-                                  '${e.friendlyName} · ${e.entityId}',
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: _working || _discovered.isEmpty
-                            ? null
-                            : (id) => setState(
-                                () => _slots[i] = _slots[i].copyWith(
-                                  entityId: id,
-                                ),
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
+              SizedBox(height: 10),
+              Text(
+                'Find each light’s IP address in its original app or your router’s connected devices. Reserve that address in your router so it stays the same.',
+              ),
             ],
           ),
         ),
         const SizedBox(height: 24),
+        for (final slot in DeviceSlot.defaults) ...[
+          DeviceSetupCard(
+            key: ValueKey('setup-${slot.id}'),
+            slot: slot,
+            saved: state.config?.devices
+                .where((d) => d.slotId == slot.id)
+                .firstOrNull,
+          ),
+          const SizedBox(height: 16),
+        ],
         SectionCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -308,7 +58,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               const SizedBox(height: 16),
               Wrap(
                 spacing: 10,
-                runSpacing: 8,
                 children: ThemeMode.values
                     .map(
                       (mode) => ChoiceChip(
@@ -328,35 +77,359 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 24),
+        const AboutListTile(
+          applicationName: 'SmartLight',
+          applicationVersion: '2.0.0',
+          icon: Icon(Icons.info_outline),
+        ),
         SectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Developer settings',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              SwitchListTile(
-                key: const ValueKey('demo-toggle'),
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Demo mode'),
-                subtitle: const Text(
-                  'Explore three simulated lights. Your saved Home Assistant credentials and mappings are kept.',
-                ),
-                value: state.settings.demo,
-                onChanged: _working || state.busy.isNotEmpty
-                    ? null
-                    : (value) => runSetting(context, controller.setDemo(value)),
-              ),
-              if (state.settings.demo)
-                const Text(
-                  'Use Diagnostics to simulate an unavailable light or an offline server.',
-                ),
-            ],
+          child: SwitchListTile(
+            key: const ValueKey('demo-toggle'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Demo mode'),
+            subtitle: const Text(
+              'Explore three simulated lights. Your saved device connections are kept.',
+            ),
+            value: state.settings.demo,
+            onChanged: state.busy.isNotEmpty
+                ? null
+                : (v) => runSetting(context, controller.setDemo(v)),
           ),
         ),
       ],
     );
   }
+}
+
+class DeviceSetupCard extends ConsumerStatefulWidget {
+  const DeviceSetupCard({super.key, required this.slot, this.saved});
+  final DeviceSlot slot;
+  final DeviceConnection? saved;
+  @override
+  ConsumerState<DeviceSetupCard> createState() => _DeviceSetupCardState();
+}
+
+class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
+  late final TextEditingController _name,
+      _host,
+      _email,
+      _password,
+      _id,
+      _key,
+      _min,
+      _max;
+  late DeviceBrand _brand;
+  TuyaVersion _version = TuyaVersion.v33;
+  TuyaProfile _profile = TuyaProfile.modern;
+  bool _working = false, _reveal = false, _success = false;
+  String? _message;
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.saved;
+    _brand =
+        d?.brand ??
+        (widget.slot.id == 'strip' ? DeviceBrand.tapo : DeviceBrand.tuya);
+    _version = d?.version ?? TuyaVersion.v33;
+    _profile = d?.profile ?? TuyaProfile.modern;
+    _name = TextEditingController(text: d?.name ?? widget.slot.name);
+    _host = TextEditingController(
+      text:
+          d?.host ??
+          (widget.slot.id == 'strip'
+              ? const String.fromEnvironment('SMARTLIGHT_TAPO_IP')
+              : ''),
+    );
+    _email = TextEditingController(text: d?.email ?? '');
+    _password = TextEditingController(text: d?.password ?? '');
+    _id = TextEditingController(text: d?.deviceId ?? '');
+    _key = TextEditingController(text: d?.localKey ?? '');
+    _min = TextEditingController(text: '${d?.minKelvin ?? 2700}');
+    _max = TextEditingController(text: '${d?.maxKelvin ?? 6500}');
+  }
+
+  @override
+  void dispose() {
+    for (final c in [_name, _host, _email, _password, _id, _key, _min, _max]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  DeviceConnection _config() => DeviceConnection(
+    slotId: widget.slot.id,
+    name: _name.text.trim(),
+    brand: _brand,
+    host: _host.text,
+    email: _email.text.trim(),
+    password: _password.text,
+    deviceId: _id.text.trim(),
+    localKey: _key.text,
+    version: _version,
+    profile: _profile,
+    minKelvin: int.tryParse(_min.text) ?? 0,
+    maxKelvin: int.tryParse(_max.text) ?? 0,
+  );
+  Future<void> _connect(bool save) async {
+    setState(() {
+      _working = true;
+      _message = null;
+    });
+    try {
+      final config = _config();
+      final controller = ref.read(appControllerProvider.notifier);
+      if (save) {
+        await controller.saveDevice(config);
+      } else {
+        await controller.inspectDevice(config);
+      }
+      if (mounted) {
+        setState(() {
+          _success = true;
+          _message = save
+              ? 'Connected and saved securely.'
+              : 'Connected. This light is ready to save.';
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _success = false;
+          _message = userMessage(error);
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Widget _field(
+    TextEditingController c,
+    String label,
+    String key, {
+    String? hint,
+    bool secret = false,
+    TextInputType? keyboard,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: 14),
+    child: TextField(
+      controller: c,
+      key: ValueKey('${widget.slot.id}-$key'),
+      enabled: !_working,
+      obscureText: secret && !_reveal,
+      autocorrect: false,
+      enableSuggestions: !secret,
+      keyboardType: keyboard,
+      onChanged: (_) {
+        if (_message != null) setState(() => _message = null);
+      },
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        suffixIcon: secret
+            ? IconButton(
+                tooltip: _reveal ? 'Hide credential' : 'Show credential',
+                onPressed: () => setState(() => _reveal = !_reveal),
+                icon: Icon(_reveal ? Icons.visibility_off : Icons.visibility),
+              )
+            : null,
+      ),
+    ),
+  );
+  @override
+  Widget build(BuildContext context) => SectionCard(
+    child: ExpansionTile(
+      key: ValueKey('expand-${widget.slot.id}'),
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(top: 18),
+      initiallyExpanded: widget.slot.id == 'strip' && widget.saved == null,
+      leading: Icon(
+        widget.slot.id == 'strip'
+            ? Icons.light_outlined
+            : Icons.lightbulb_outline,
+      ),
+      title: Text(widget.saved?.name ?? widget.slot.name),
+      subtitle: Text(
+        widget.saved == null
+            ? 'Not connected · tap to set up'
+            : '${widget.saved!.host} · ${widget.saved!.protocolLabel}',
+      ),
+      children: [
+        _field(_name, 'Name in your room', 'name'),
+        DropdownButtonFormField<DeviceBrand>(
+          initialValue: _brand,
+          decoration: const InputDecoration(labelText: 'Light type'),
+          items: const [
+            DropdownMenuItem(
+              value: DeviceBrand.tuya,
+              child: Text('Wipro / Tuya Wi-Fi light'),
+            ),
+            DropdownMenuItem(
+              value: DeviceBrand.tapo,
+              child: Text('Tapo light'),
+            ),
+          ],
+          onChanged: _working
+              ? null
+              : (v) => setState(() {
+                  _brand = v!;
+                  _message = null;
+                }),
+        ),
+        const SizedBox(height: 14),
+        _field(
+          _host,
+          'Light IP address',
+          'host',
+          hint: '192.168.1.50',
+          keyboard: TextInputType.number,
+        ),
+        if (_brand == DeviceBrand.tapo) ...[
+          const Padding(
+            padding: EdgeInsets.only(bottom: 16),
+            child: Text(
+              'Use the account that owns this light in Tapo. Enable Third-Party Compatibility in Tapo if available. Your credentials stay on this device.',
+            ),
+          ),
+          _field(
+            _email,
+            'Tapo email',
+            'email',
+            keyboard: TextInputType.emailAddress,
+          ),
+          _field(_password, 'Tapo password', 'password', secret: true),
+        ] else ...[
+          const Padding(
+            padding: EdgeInsets.only(bottom: 16),
+            child: Text(
+              'A Wipro password cannot unlock local control. You need this light’s device ID and local key from a compatible Tuya account or an existing key export. Compatibility with SB22240 must be tested.',
+            ),
+          ),
+          _field(_id, 'Device ID', 'device-id'),
+          _field(_key, 'Local key (16 bytes)', 'local-key', secret: true),
+          DropdownButtonFormField<TuyaVersion>(
+            initialValue: _version,
+            decoration: const InputDecoration(
+              labelText: 'Local protocol version',
+            ),
+            items: TuyaVersion.values
+                .map(
+                  (v) => DropdownMenuItem(
+                    value: v,
+                    child: Text(DeviceConnection.versionText(v)),
+                  ),
+                )
+                .toList(),
+            onChanged: _working ? null : (v) => setState(() => _version = v!),
+          ),
+          const SizedBox(height: 14),
+          DropdownButtonFormField<TuyaProfile>(
+            initialValue: _profile,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Light profile'),
+            items: const [
+              DropdownMenuItem(
+                value: TuyaProfile.modern,
+                child: Text('Modern RGB + white (DP 20–24)'),
+              ),
+              DropdownMenuItem(
+                value: TuyaProfile.legacy,
+                child: Text('Legacy RGB + white (DP 1–5)'),
+              ),
+            ],
+            onChanged: _working ? null : (v) => setState(() => _profile = v!),
+          ),
+          const SizedBox(height: 14),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: const Text('Local key and white range help'),
+            children: [
+              const Text(
+                'If your light is supported in Smart Life or Tuya Smart, a one-time Tuya developer account link and TinyTuya wizard can export its ID and local key. Wipro Next accounts are not guaranteed to link. Do not reset all your lights to try this. See LOCAL_SETUP.md in the project for the steps and limitations. Never share your local keys or password in chat.',
+              ),
+              const SizedBox(height: 12),
+              _field(
+                _min,
+                'Warmest white (K)',
+                'min-kelvin',
+                keyboard: TextInputType.number,
+              ),
+              _field(
+                _max,
+                'Coolest white (K)',
+                'max-kelvin',
+                keyboard: TextInputType.number,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+        ],
+        if (_message != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Text(
+              _message!,
+              style: TextStyle(
+                color: _success
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            OutlinedButton(
+              onPressed: _working ? null : () => _connect(false),
+              child: const Text('Test connection'),
+            ),
+            FilledButton.icon(
+              key: ValueKey('save-${widget.slot.id}'),
+              onPressed: _working ? null : () => _connect(true),
+              icon: _working
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.link),
+              label: const Text('Connect & save'),
+            ),
+            if (widget.saved != null)
+              TextButton(
+                onPressed: _working
+                    ? null
+                    : () async {
+                        setState(() => _working = true);
+                        try {
+                          await ref
+                              .read(appControllerProvider.notifier)
+                              .removeDevice(widget.slot.id);
+                          if (mounted) {
+                            setState(() {
+                              _password.clear();
+                              _key.clear();
+                              _message = 'Device removed from SmartLight.';
+                              _success = true;
+                            });
+                          }
+                        } catch (error) {
+                          if (mounted) {
+                            setState(() {
+                              _message = userMessage(error);
+                              _success = false;
+                            });
+                          }
+                        } finally {
+                          if (mounted) setState(() => _working = false);
+                        }
+                      },
+                child: const Text('Remove connection'),
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../providers/app_controller.dart';
-import '../services/ha_exception.dart';
+import '../services/device_exception.dart';
 
 Future<void> runAction(
   BuildContext context,

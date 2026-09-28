@@ -19,7 +19,7 @@ class SecureStorageService implements CredentialStore {
             mOptions: MacOsOptions(usesDataProtectionKeychain: false),
           );
   final FlutterSecureStorage _storage;
-  static const _key = 'smartlight.home_assistant';
+  static const _key = 'smartlight.local_devices.v2';
   @override
   Future<ConnectionConfig?> read() async {
     final value = await _storage
@@ -27,14 +27,11 @@ class SecureStorageService implements CredentialStore {
         .timeout(const Duration(seconds: 10));
     if (value == null) return null;
     final data = jsonDecode(value) as Map<String, dynamic>;
-    return ConnectionConfig(data['url'] as String, data['token'] as String);
+    return ConnectionConfig.fromJson(data);
   }
 
   @override
   Future<void> write(ConnectionConfig config) => _storage
-      .write(
-        key: _key,
-        value: jsonEncode({'url': config.url, 'token': config.token}),
-      )
+      .write(key: _key, value: jsonEncode(config.toJson()))
       .timeout(const Duration(seconds: 10));
 }

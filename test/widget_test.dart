@@ -52,19 +52,23 @@ void main() {
     (tester) async {
       await launch(tester, demo: false);
       expect(find.text('One room. All your lights.'), findsOneWidget);
-      await tester.tap(find.text('Set up Home Assistant'));
+      await tester.tap(find.text('Add your lights'));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('ha-url')), findsOneWidget);
-      expect(find.byKey(const ValueKey('ha-token')), findsOneWidget);
+      expect(find.byKey(const ValueKey('strip-host')), findsOneWidget);
+      expect(find.byKey(const ValueKey('strip-password')), findsOneWidget);
+      await tester.ensureVisible(find.text('Test connection'));
       await tester.tap(find.text('Test connection'));
       await tester.pumpAndSettle();
       expect(
-        find.textContaining('Enter a valid Home Assistant origin'),
+        find.textContaining('Enter the light’s local IPv4'),
         findsOneWidget,
       );
       await tester.tap(find.text('Diagnostics').first);
       await tester.pumpAndSettle();
-      expect(find.text('WebSocket: disconnected'), findsOneWidget);
+      expect(
+        find.text('Refreshes every 5 seconds while the app is open.'),
+        findsOneWidget,
+      );
       expect(find.byKey(const ValueKey('ha-token')), findsNothing);
       expect(tester.takeException(), isNull);
     },
@@ -86,7 +90,7 @@ void main() {
       () => container.read(appControllerProvider.notifier).setDemoOffline(true),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Home Assistant offline (demo).'), findsOneWidget);
+    expect(find.text('Room Wi-Fi offline (demo).'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   for (final size in [

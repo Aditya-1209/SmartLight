@@ -40,7 +40,7 @@ class DeviceDetailScreen extends ConsumerWidget {
             children: [
               PageHeading(
                 slot.name,
-                slot.entityId ?? 'Map this device in Settings',
+                slot.entityId ?? 'Add this light in Settings',
               ),
               if (state.error != null)
                 Padding(
@@ -133,7 +133,7 @@ class DeviceDetailScreen extends ConsumerWidget {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 12),
-                    Text('State: ${light?.state ?? 'Not mapped'}'),
+                    Text('State: ${light?.state ?? 'Not set up'}'),
                     Text(
                       'Color mode: ${light?.rawAttributes['color_mode'] ?? 'Unknown'}',
                     ),

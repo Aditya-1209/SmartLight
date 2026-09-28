@@ -64,7 +64,7 @@ class DashboardScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  'Connect Home Assistant to bring your Wipro battens and Tapo strip together. Or explore with three demo lights.',
+                  'Control your lights directly on your room’s Wi-Fi. Add a light to get started, or explore with three demo lights.',
                 ),
                 const SizedBox(height: 20),
                 Wrap(
@@ -73,7 +73,7 @@ class DashboardScreen extends ConsumerWidget {
                   children: [
                     FilledButton(
                       onPressed: onSetup,
-                      child: const Text('Set up Home Assistant'),
+                      child: const Text('Add your lights'),
                     ),
                     OutlinedButton.icon(
                       key: const ValueKey('start-demo'),

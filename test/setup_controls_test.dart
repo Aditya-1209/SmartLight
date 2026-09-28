@@ -4,13 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_light/app/app.dart';
 import 'package:smart_light/models/light_entity.dart';
 import 'package:smart_light/providers/app_controller.dart';
-import 'package:smart_light/services/mock_home_assistant.dart';
+import 'package:smart_light/services/demo_lights.dart';
 import 'package:smart_light/widgets/brightness_slider.dart';
 import 'package:smart_light/widgets/color_picker.dart';
 
 import 'support.dart';
 
-class CapabilityBackend extends MockHomeAssistant {
+class CapabilityBackend extends DemoLights {
   CapabilityBackend() : super(latency: Duration.zero);
   @override
   Future<List<LightEntity>> getLights() async =>
@@ -48,7 +48,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('test connection, map entities, edit a name, and save securely', (
+  testWidgets('connect and save a single Tapo light with masked credentials', (
     tester,
   ) async {
     final credentials = MemoryCredentials();
@@ -59,43 +59,43 @@ void main() {
       settings: settings,
     );
     await show(tester, container);
-    await tester.tap(find.text('Set up Home Assistant'));
+    await tester.tap(find.text('Add your lights'));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('ha-url')),
-      'https://example.com',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('ha-token')),
-      'test-token',
-    );
-    await tester.tap(find.text('Test connection'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Found 3 light entities'), findsOneWidget);
-    final names = ['Wipro Tube 1', 'Wipro Tube 2', 'Tapo Strip'];
-    final ids = [
-      'light.wipro_tube_1',
-      'light.wipro_tube_2',
-      'light.tapo_strip',
-    ];
-    for (var i = 0; i < 3; i++) {
-      final picker = find.byKey(ValueKey('mapping-$i-null-3'));
-      await tester.ensureVisible(picker);
-      await tester.tap(picker);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('${names[i]} · ${ids[i]}').last);
-      await tester.pumpAndSettle();
+    for (final entry in {
+      'strip-host': '192.168.1.50',
+      'strip-email': 'test@example.com',
+      'strip-password': 'test-password',
+      'strip-name': 'Desk strip',
+    }.entries) {
+      final field = find.byKey(ValueKey(entry.key));
+      await tester.ensureVisible(field);
+      await tester.enterText(field, entry.value);
     }
-    final nameField = find.widgetWithText(TextField, 'Wipro Tube 1 · app name');
-    await tester.ensureVisible(nameField);
-    await tester.enterText(nameField, 'Desk light');
-    await tester.ensureVisible(find.text('Save'));
-    await tester.tap(find.text('Save'));
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('strip-password')))
+          .obscureText,
+      true,
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('save-strip')));
+    await tester.tap(find.byKey(const ValueKey('save-strip')));
     await tester.pumpAndSettle();
-    expect(find.text('Saved securely. Your room is ready.'), findsOneWidget);
-    expect(credentials.config!.token, 'test-token');
-    expect(settings.value.slots.first.name, 'Desk light');
+    expect(find.text('Connected and saved securely.'), findsOneWidget);
+    expect(credentials.config!.devices.single.password, 'test-password');
+    expect(credentials.config!.devices.single.name, 'Desk strip');
+    expect(
+      settings.value.toJson().toString(),
+      isNot(contains('test-password')),
+    );
     expect(container.read(appControllerProvider).settings.demo, false);
+    expect(
+      container
+          .read(appControllerProvider)
+          .slots
+          .where((s) => s.entityId != null)
+          .length,
+      1,
+    );
     await tester.pumpWidget(const SizedBox.shrink());
     container.dispose();
     expect(tester.takeException(), isNull);

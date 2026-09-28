@@ -32,7 +32,7 @@ class LightCommand {
         light.maxColorTempKelvin,
       );
     }
-    // HA preserves brightness by default, but an off light may remember zero.
+    // Preserve a visible brightness when changing an off light’s color.
     if ((data.containsKey('rgb_color') ||
             data.containsKey('color_temp_kelvin')) &&
         !data.containsKey('brightness') &&

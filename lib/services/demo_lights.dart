@@ -4,11 +4,11 @@ import '../models/device_slot.dart';
 import '../models/light_command.dart';
 import '../models/light_entity.dart';
 import '../repositories/lights_repository.dart';
-import 'ha_exception.dart';
-import 'home_assistant_websocket.dart';
+import 'device_exception.dart';
+import 'connection_status.dart';
 
-class MockHomeAssistant implements LightsRepository {
-  MockHomeAssistant({this.latency = const Duration(milliseconds: 100)}) {
+class DemoLights implements LightsRepository {
+  DemoLights({this.latency = const Duration(milliseconds: 100)}) {
     for (final slot in DeviceSlot.demo) {
       final strip = slot.id == 'strip';
       _lights[slot.entityId!] = LightEntity.fromJson({
@@ -30,20 +30,20 @@ class MockHomeAssistant implements LightsRepository {
   final Duration latency;
   final _lights = <String, LightEntity>{};
   final _updates = StreamController<LightEntity>.broadcast();
-  final _statuses = StreamController<RealtimeStatus>.broadcast();
+  final _statuses = StreamController<ConnectionStatus>.broadcast();
   bool offline = false;
   bool _disposed = false;
   final Set<String> failCommands = {};
   @override
   Stream<LightEntity> get updates => _updates.stream;
   @override
-  Stream<RealtimeStatus> get statuses => _statuses.stream;
+  Stream<ConnectionStatus> get statuses => _statuses.stream;
   Future<void> _check() async {
     await Future<void>.delayed(latency);
     if (offline) {
-      throw const HaException(
-        HaError.unreachable,
-        'Home Assistant offline (demo).',
+      throw const DeviceException(
+        DeviceError.unreachable,
+        'Room Wi-Fi offline (demo).',
       );
     }
   }
@@ -66,14 +66,17 @@ class MockHomeAssistant implements LightsRepository {
   Future<void> command(LightEntity light, LightCommand command) async {
     await _check();
     if (failCommands.contains(light.entityId)) {
-      throw const HaException(
-        HaError.server,
+      throw const DeviceException(
+        DeviceError.server,
         'Demo device rejected the command.',
       );
     }
     final current = _lights[light.entityId]!;
     if (!current.available) {
-      throw const HaException(HaError.unavailable, 'Device unavailable.');
+      throw const DeviceException(
+        DeviceError.unavailable,
+        'Device unavailable.',
+      );
     }
     final data = command.toServiceData(current)..remove('entity_id');
     final attrs = {...current.rawAttributes, ...data};
@@ -112,14 +115,14 @@ class MockHomeAssistant implements LightsRepository {
     offline = value;
     if (!_disposed) {
       _statuses.add(
-        value ? RealtimeStatus.reconnecting : RealtimeStatus.connected,
+        value ? ConnectionStatus.reconnecting : ConnectionStatus.connected,
       );
     }
   }
 
   @override
   void start() {
-    if (!_disposed) _statuses.add(RealtimeStatus.connected);
+    if (!_disposed) _statuses.add(ConnectionStatus.connected);
   }
 
   @override

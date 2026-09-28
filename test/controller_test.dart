@@ -6,7 +6,7 @@ import 'package:smart_light/models/light_command.dart';
 import 'package:smart_light/models/scene.dart';
 import 'package:smart_light/providers/app_controller.dart';
 import 'package:smart_light/repositories/settings_repository.dart';
-import 'package:smart_light/services/mock_home_assistant.dart';
+import 'package:smart_light/services/demo_lights.dart';
 
 import 'support.dart';
 
@@ -14,7 +14,7 @@ void main() {
   test(
     'master control identifies each failed device and updates successful ones',
     () async {
-      final backend = MockHomeAssistant(latency: Duration.zero)
+      final backend = DemoLights(latency: Duration.zero)
         ..failCommands.add('light.wipro_tube_2');
       final container = testContainer(backend: backend);
       addTearDown(container.dispose);
@@ -42,7 +42,7 @@ void main() {
     },
   );
   test('unavailable device does not stop a scene', () async {
-    final backend = MockHomeAssistant(latency: Duration.zero);
+    final backend = DemoLights(latency: Duration.zero);
     backend.setAvailable('light.wipro_tube_2', false);
     final container = testContainer(backend: backend);
     addTearDown(container.dispose);
@@ -69,7 +69,7 @@ void main() {
   });
   test('demo toggle preserves real credentials, mappings and theme through restart', () async {
     final credentials = MemoryCredentials()
-      ..config = ConnectionConfig('https://example.com', 'test-token');
+      ..config = ConnectionConfig([tapoConfig()]);
     final settings = MemorySettings(const AppSettings(slots: DeviceSlot.demo));
     var container = testContainer(
       demo: false,
@@ -82,7 +82,7 @@ void main() {
     await controller.setTheme(ThemeMode.dark);
     await controller.setDemo(true);
     await controller.setDemo(false);
-    expect(credentials.config!.token, 'test-token');
+    expect(credentials.config!.devices.single.password, 'test-password');
     expect(settings.value.slots, DeviceSlot.demo);
     container.dispose();
     container = testContainer(credentials: credentials, settings: settings);
@@ -96,7 +96,7 @@ void main() {
     expect(container.read(appControllerProvider).settings.demo, false);
   });
   test(
-    'saving maps all three entities and stores credentials outside preferences',
+    'saving one light works without the other two and secures credentials',
     () async {
       final credentials = MemoryCredentials();
       final settings = MemorySettings();
@@ -108,12 +108,12 @@ void main() {
       addTearDown(container.dispose);
       final controller = container.read(appControllerProvider.notifier);
       await controller.initialize();
-      await controller.saveConfiguration(
-        ConnectionConfig('https://example.com', 'test-token'),
-        DeviceSlot.demo,
+      await controller.saveDevice(tapoConfig());
+      expect(credentials.config!.devices.single.password, 'test-password');
+      expect(
+        settings.value.toJson().toString(),
+        isNot(contains('test-password')),
       );
-      expect(credentials.config!.token, 'test-token');
-      expect(settings.value.toJson().toString(), isNot(contains('test-token')));
       expect(container.read(appControllerProvider).connected, true);
     },
   );

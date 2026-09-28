@@ -60,3 +60,12 @@ key.properties
 credentials*.json
 *.mobileprovision
 test-results/
+
+# Tuya one-time provisioning exports
+devices.json
+tinytuya.json
+snapshot.json
+tuya-raw.json
+.venv/
+
+/android/build/
