@@ -67,6 +67,20 @@ class _AppShellState extends ConsumerState<AppShell>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(appControllerProvider);
+    if (state.loading && !state.configured) {
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 20),
+              Text('Opening your room…'),
+            ],
+          ),
+        ),
+      );
+    }
     final scheme = Theme.of(context).colorScheme;
     final wide = MediaQuery.sizeOf(context).width >= 850;
     final screen = switch (_page) {

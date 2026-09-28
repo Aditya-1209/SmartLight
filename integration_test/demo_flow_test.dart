@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_light/app/app.dart';
 import 'package:smart_light/providers/app_controller.dart';
 
@@ -9,6 +11,24 @@ import '../test/support.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets('native secure storage and preference persistence round trip', (
+    tester,
+  ) async {
+    const storage = FlutterSecureStorage(
+      mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+    );
+    final preferences = SharedPreferencesAsync();
+    const key = 'smartlight.integration_test_probe';
+    try {
+      await storage.write(key: key, value: 'non-secret-test-value');
+      expect(await storage.read(key: key), 'non-secret-test-value');
+      await preferences.setString(key, 'dark');
+      expect(await SharedPreferencesAsync().getString(key), 'dark');
+    } finally {
+      await storage.delete(key: key);
+      await preferences.remove(key);
+    }
+  });
   testWidgets(
     'configure demo, control a light, change brightness/color, apply Movie',
     (tester) async {
