@@ -294,6 +294,37 @@ class AppController extends Notifier<AppState> {
 
   Future<void> removeDevice(String slotId) =>
       _configurationQueue.run(() => _removeDevice(slotId));
+
+  Future<ConnectionConfig> configurationForTransfer() async {
+    await _ensureStorageReady();
+    final config = state.config;
+    if (config == null || config.devices.isEmpty) {
+      throw const DeviceException(
+        DeviceError.storage,
+        'Connect and save a light first.',
+      );
+    }
+    return config;
+  }
+
+  Future<void> importConnections(ConnectionConfig incoming) =>
+      _configurationQueue.run(() async {
+        await _ensureStorageReady();
+        if (incoming.devices.isEmpty) {
+          throw const DeviceException(
+            DeviceError.invalidUrl,
+            'Select a light to import.',
+          );
+        }
+        final slots = incoming.devices.map((d) => d.slotId).toSet();
+        // Validate the complete merge before making any persistent change.
+        final merged = ConnectionConfig([
+          ...?state.config?.devices.where((d) => !slots.contains(d.slotId)),
+          ...incoming.devices,
+        ]);
+        await _saveConfig(merged);
+      });
+
   Future<void> _removeDevice(String slotId) async {
     await _ensureStorageReady();
     final config = ConnectionConfig(

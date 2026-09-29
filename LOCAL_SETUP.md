@@ -15,6 +15,16 @@ SmartLight tries KLAP v1/v2 first, then legacy RSA/AES passthrough (login v1) wh
 
 Capabilities come from the device response. Some L920 firmware reports a fixed white range (for example 9000–9000 K); SmartLight hides the temperature slider in that case. RGB white is available in color presets. Unsupported scene parameters are skipped. Addressable effects/music are not exposed; manual changes disable the strip's active lighting effect.
 
+## Use the same lights on Mac, Android and Windows
+
+Pair each light only once. On the device where it works, choose **Connect & save**, then **Settings → Use lights on another device → Send setup**. Choose a new transfer password (at least 12 characters), create an encrypted code and copy it to your other device. Share the transfer password separately.
+
+On each receiving device, open **Settings → Use lights on another device → Receive setup**. Paste the code, enter the transfer password, choose **Unlock and review**, select the lights, then **Save selected lights**. Selected slots replace their old connection; other lights are preserved. Import stores the connection securely and tries to reconnect. It does not establish hardware compatibility or guarantee that an offline light is reachable.
+
+Codes contain saved device IDs, local keys, LAN addresses, protocol/profile settings and any configured Tapo login credentials. They exclude Wi-Fi passwords and Tuya cloud/SDK pairing profiles. AES-256-GCM authenticates the contents; a fresh salt/nonce and PBKDF2-HMAC-SHA256 (600,000 iterations) protect each export. They are portable backups, not expiring or one-use tokens. Keep the code and password private. No upload, account sync or always-on computer is involved. Re-export if a light is reset/re-paired or its connection details change.
+
+All controllers must be on the same LAN as the lights (2.4/5 GHz can coexist after provisioning). Android release builds still only permit Tapo HTTP at the IP configured when building; importing another address does not widen that policy. Keep the strip at its configured/reserved address.
+
 ## Wipro Next Smart Home battens
 
 **The exact SB22240 model has not been verified with this implementation.** A Wipro Next login is not sufficient for Tuya LAN control. Each compatible batten needs its local IPv4 address, device ID, a 16-byte local key, protocol version and light profile.
@@ -30,7 +40,7 @@ Mac setup uses Tuya Cloud OpenAPI plus an in-process Dart implementation of Tuya
 5. The app retrieves the local key, listens for the light's LAN address/protocol, then returns to device settings. If discovery is unavailable, enter the local IP/protocol manually. Check the modern/legacy profile and choose **Connect & save**; the LAN connection must work before the light is stored.
 6. If pairing finishes after a timeout or the LAN connection fails, choose **Check setup** again and select the existing light. Do not reset repeatedly before checking for a completed pairing. Cancelling/closing the screen stops the setup HTTP and UDP sockets.
 
-Everyday commands use only the LAN transports. A Tuya developer trial expiring can prevent future pairing/retrieval, but the app does not call that API for lights whose working local credentials are already saved. No paid plan is automatically purchased. Keep the saved pairing profile. Connection details are not automatically synchronized to Android or Windows; provision their local credentials separately, without resetting the light again.
+Everyday commands use only the LAN transports. A Tuya developer trial expiring can prevent future pairing/retrieval, but the app does not call that API for lights whose working local credentials are already saved. No paid plan is automatically purchased. Keep the saved pairing profile. Use the encrypted setup transfer above to copy working connections to Android or Windows without resetting the light again.
 
 The Mac release enables the sandbox's incoming-network entitlement for the short-lived UDP discovery listeners on ports 6666/6667/7000. No HTTP listener or persistent service is created. UDP discovery data is untrusted until the existing authenticated TCP connection test succeeds.
 
@@ -47,7 +57,7 @@ This optional flow uses the official Tuya Smart Life SDK 7.8.0 during setup. It 
 5. Pairing returns the device ID/key and, when available, a private IPv4 address, supported protocol version and light profile. If the SDK has no private IP or a recognized protocol, supply/check those fields yourself. Choose **Connect & save** to verify LAN access before the connection is stored.
 6. If pairing succeeded but the LAN test failed, reopen pairing and select the light under **Already paired here** to retrieve its details again. This does not reset the light. The SDK connection is closed when the pairing screen closes.
 
-The local controller used by normal lighting commands has not changed. Once valid connection details are stored, those commands do not use the SDK or Tuya developer cloud API. The SDK requires internet during pairing/refresh. SDK compatibility and real offline control on SB22240 remain unverified until a physical test succeeds. Keep the app's data: clearing it or uninstalling loses the installation's pairing profile. Updates using the same application ID and signing certificate preserve it. Mac has the separate setup flow above; Windows uses supplied local connection details. This release does not sync keys across devices.
+The local controller used by normal lighting commands has not changed. Once valid connection details are stored, those commands do not use the SDK or Tuya developer cloud API. The SDK requires internet during pairing/refresh. SDK compatibility and real offline control on SB22240 remain unverified until a physical test succeeds. Keep the app's data: clearing it or uninstalling loses the installation's pairing profile. Updates using the same application ID and signing certificate preserve it. Use the encrypted setup transfer above to copy working connections to Mac and Windows.
 
 The [Tuya SDK development edition](https://developer.tuya.com/en/docs/app-development/app-sdk-price?id=Kbu0tcr2cbx3o) is intended for noncommercial development/personal use with limits. Do not publish this private SDK APK on an app store or upload it as a public GitHub artifact. No paid subscription is needed to build this edition; terms/availability can change.
 

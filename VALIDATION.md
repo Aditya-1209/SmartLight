@@ -1,5 +1,14 @@
 # Direct-control validation record
 
+## 2026-09-29 — SmartLight 2.3.0 setup transfer
+
+- Added password-protected setup codes shared by Android, macOS and Windows. Only saved light connections are exported; Wi-Fi passwords and developer/SDK pairing profiles are excluded. AES-256-GCM uses a fresh salt/nonce, PBKDF2-HMAC-SHA256 with 600,000 iterations, authenticated version context and bounded input. Key derivation runs in a background isolate. Clipboard writes require the user's Copy action.
+- Import previews selectable lights before saving, merges selected room slots, preserves other connections, rejects conflicting IPs and respects the existing secure-storage read guard. Settings refresh imported fields while preserving normal Connect & save feedback. Fixed the light-type dropdown's overflow at phone width.
+- All **85 tests passed**. Encryption checks include an independent Python fixture, credential round trips, fresh randomness, wrong passwords, tampered ciphertext, size/schema limits and invalid private-address data. A phone-sized widget test covers Settings → receive → review → save → refreshed settings; controller checks cover merge conflicts and storage failures. Analyzer and formatting checks passed. A final null-guard adjustment also passed the four affected screen tests.
+- macOS release **2.3.0 / build 7** built (47.1 MB), passed deep/strict signature verification, and opened successfully. Xcode emitted warnings about previously removed precompiled-module paths, but completed the build. Both transfer forms were inspected in the native app. After the user approved the updated app's login-Keychain access, Retry restored the existing Tapo connection; My Room showed **Online, On, 74%**.
+- Personal Android ARM64 pairing release **2.3.0 / build 7** built (44.4 MB) using the existing private SDK registration. Package/version and the existing signing certificate were verified, and the packaged network policy retains only the configured Tapo IP exception. The APK remains local and is not a public CI artifact. The matching Windows release is produced by the GitHub Actions run for this commit; consult that run for its actual result.
+- The user's desktop EZ attempt did not register the Wipro tube, including an attempt while the Mac was confirmed on 2.4 GHz; the tube kept blinking quickly. Android SDK AP/slow-blinking pairing is the next physical test. No Wipro local key has been obtained, and no real three-platform Wipro control or setup-code transfer has been claimed. No Home Assistant, always-on computer or new paid service was introduced.
+
 ## 2026-09-29 — SmartLight 2.2.0 Mac pairing
 
 - Linked the existing SmartLight SDK app to the existing Central Europe cloud project after explicit user approval. No new paid plan or add-on was selected. The Wipro QR account link remains unused.

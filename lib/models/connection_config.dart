@@ -9,7 +9,7 @@ enum TuyaVersion { v33, v34, v35 }
 
 enum TuyaProfile { modern, legacy }
 
-/// Credentials are serialized only to the platform's secure store.
+/// Credentials are serialized for secure storage or authenticated, encrypted transfer.
 class DeviceConnection {
   DeviceConnection({
     required this.slotId,

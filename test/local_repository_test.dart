@@ -84,6 +84,14 @@ void main() {
       controller.removeDevice('strip'),
       throwsA(isA<DeviceException>()),
     );
+    await expectLater(
+      controller.importConnections(ConnectionConfig([tapoConfig()])),
+      throwsA(isA<DeviceException>()),
+    );
+    await expectLater(
+      controller.configurationForTransfer(),
+      throwsA(isA<DeviceException>()),
+    );
     expect(credentials.writes, 0);
     expect(credentials.config?.devices.single.name, 'Tapo Strip');
   });
@@ -154,6 +162,48 @@ void main() {
       'tube1',
     });
   });
+  test(
+    'imports merge slots atomically and reject conflicting addresses',
+    () async {
+      final credentials = MemoryCredentials()
+        ..config = ConnectionConfig([tapoConfig()]);
+      final container = testContainer(demo: false, credentials: credentials);
+      addTearDown(container.dispose);
+      final controller = container.read(appControllerProvider.notifier);
+      await controller.initialize();
+      DeviceConnection tube(String host) => DeviceConnection(
+        slotId: 'tube1',
+        name: 'New tube',
+        brand: DeviceBrand.tuya,
+        host: host,
+        deviceId: 'synthetic-device',
+        localKey: '0123456789abcdef',
+      );
+      await expectLater(
+        controller.importConnections(ConnectionConfig([tube('192.168.1.50')])),
+        throwsA(isA<DeviceException>()),
+      );
+      expect(credentials.config!.devices, hasLength(1));
+      await controller.importConnections(
+        ConnectionConfig([tube('192.168.1.25')]),
+      );
+      expect(credentials.config!.devices.map((d) => d.slotId).toSet(), {
+        'strip',
+        'tube1',
+      });
+      await controller.importConnections(
+        ConnectionConfig([tapoConfig(name: 'Renamed strip')]),
+      );
+      expect(credentials.config!.devices, hasLength(2));
+      expect(
+        credentials.config!.devices
+            .singleWhere((d) => d.slotId == 'strip')
+            .name,
+        'Renamed strip',
+      );
+      expect(await controller.configurationForTransfer(), credentials.config);
+    },
+  );
   test('secure configuration round trip redacts toString and prevents duplicate devices', () {
     final config = ConnectionConfig([tapoConfig()]);
     expect(

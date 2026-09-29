@@ -11,6 +11,7 @@ import '../../services/pairing/tuya_pairing.dart';
 import '../../widgets/common.dart';
 import 'wipro_pairing_screen.dart';
 import 'mac_wipro_pairing_screen.dart';
+import 'setup_transfer_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -56,6 +57,21 @@ class SettingsScreen extends ConsumerWidget {
           const SizedBox(height: 16),
         ],
         SectionCard(
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.devices),
+            title: const Text('Use lights on another device'),
+            subtitle: const Text(
+              'Pair once, then transfer setup to Mac, Android or Windows.',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SetupTransferScreen()),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        SectionCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -84,7 +100,7 @@ class SettingsScreen extends ConsumerWidget {
         const SizedBox(height: 24),
         const AboutListTile(
           applicationName: 'SmartLight',
-          applicationVersion: '2.1.0',
+          applicationVersion: '2.3.0',
           icon: Icon(Icons.info_outline),
         ),
         SectionCard(
@@ -115,6 +131,7 @@ class DeviceSetupCard extends ConsumerStatefulWidget {
 }
 
 class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
+  DeviceConnection? _localSave;
   late final TextEditingController _name,
       _host,
       _email,
@@ -179,6 +196,35 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
   }
 
   @override
+  void didUpdateWidget(covariant DeviceSetupCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(widget.saved, oldWidget.saved)) return;
+    // A save from this form already has the right fields and success feedback.
+    // Imports, by contrast, must replace the old form and clear its status.
+    if (_localSave != null && identical(widget.saved, _localSave)) {
+      _localSave = null;
+      return;
+    }
+    final d = widget.saved;
+    _brand =
+        d?.brand ??
+        (widget.slot.id == 'strip' ? DeviceBrand.tapo : DeviceBrand.tuya);
+    _version = d?.version ?? TuyaVersion.v33;
+    _profile = d?.profile ?? TuyaProfile.modern;
+    _name.text = d?.name ?? widget.slot.name;
+    _host.text = d?.host ?? '';
+    _email.text = d?.email ?? '';
+    _password.text = d?.password ?? '';
+    _id.text = d?.deviceId ?? '';
+    _key.text = d?.localKey ?? '';
+    _min.text = '${d?.minKelvin ?? 2700}';
+    _max.text = '${d?.maxKelvin ?? 6500}';
+    _message = null;
+    _success = false;
+    _reveal = false;
+  }
+
+  @override
   void dispose() {
     for (final c in [_name, _host, _email, _password, _id, _key, _min, _max]) {
       c.dispose();
@@ -209,6 +255,7 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
       final config = _config();
       final controller = ref.read(appControllerProvider.notifier);
       if (save) {
+        _localSave = config;
         await controller.saveDevice(config);
       } else {
         await controller.inspectDevice(config);
@@ -222,6 +269,7 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
         });
       }
     } catch (error) {
+      _localSave = null;
       if (mounted) {
         setState(() {
           _success = false;
@@ -287,6 +335,7 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
       children: [
         _field(_name, 'Name in your room', 'name'),
         DropdownButtonFormField<DeviceBrand>(
+          isExpanded: true,
           initialValue: _brand,
           decoration: const InputDecoration(labelText: 'Light type'),
           items: const [
@@ -346,6 +395,7 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
           _field(_id, 'Device ID', 'device-id'),
           _field(_key, 'Local key (16 bytes)', 'local-key', secret: true),
           DropdownButtonFormField<TuyaVersion>(
+            isExpanded: true,
             key: ValueKey('protocol-${widget.slot.id}-${_version.name}'),
             initialValue: _version,
             decoration: const InputDecoration(
