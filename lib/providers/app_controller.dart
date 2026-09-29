@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/connection_config.dart';
@@ -119,6 +120,7 @@ class AppController extends Notifier<AppState> {
   bool _disposed = false;
   bool _foreground = true;
   Future<void>? _initialization;
+  bool _storageReady = false;
   final Map<String, int> _revisions = {};
   final _configurationQueue = DeviceQueue();
   @override
@@ -130,20 +132,35 @@ class AppController extends Notifier<AppState> {
     return const AppState();
   }
 
-  Future<void> initialize() => _initialization ??= _initialize();
+  Future<void> initialize() {
+    if (_storageReady) return Future.value();
+    return _initialization ??= _initialize().whenComplete(() {
+      _initialization = null;
+    });
+  }
+
   Future<void> _initialize() async {
     state = state.copyWith(loading: true);
     try {
       final settings = await ref.read(settingsStoreProvider).read();
       final config = await ref.read(credentialStoreProvider).read();
       if (_disposed) return;
+      _storageReady = true;
       state = AppState(settings: settings, config: config);
       if (state.configured) await _attach();
-    } catch (_) {
+    } catch (error) {
       if (!_disposed) {
+        final detail = error is TimeoutException
+            ? ' (Storage read timed out.)'
+            : error is PlatformException && error.details is int
+            ? ' (Storage code ${error.details}.)'
+            : error is FormatException || error is TypeError
+            ? ' (Saved connection data could not be decoded.)'
+            : '';
         state = state.copyWith(
           loading: false,
-          error: 'Could not read saved settings or secure credentials. Check your system keychain and try again.',
+          error:
+              'Could not read saved settings or secure credentials. Check your system keychain and try again.$detail',
         );
       }
     }
@@ -202,6 +219,10 @@ class AppController extends Notifier<AppState> {
   }
 
   Future<void> refresh({bool force = false}) async {
+    if (!_storageReady) {
+      await initialize();
+      return;
+    }
     final backend = _backend;
     if (backend == null || (state.loading && !force)) return;
     final generation = _generation;
@@ -255,6 +276,7 @@ class AppController extends Notifier<AppState> {
   Future<void> saveDevice(DeviceConnection device) =>
       _configurationQueue.run(() => _saveDevice(device));
   Future<void> _saveDevice(DeviceConnection device) async {
+    await _ensureStorageReady();
     final devices = [
       ...?state.config?.devices.where((d) => d.slotId != device.slotId),
       device,
@@ -273,6 +295,7 @@ class AppController extends Notifier<AppState> {
   Future<void> removeDevice(String slotId) =>
       _configurationQueue.run(() => _removeDevice(slotId));
   Future<void> _removeDevice(String slotId) async {
+    await _ensureStorageReady();
     final config = ConnectionConfig(
       state.config?.devices.where((d) => d.slotId != slotId).toList() ?? [],
     );
@@ -297,6 +320,16 @@ class AppController extends Notifier<AppState> {
       clearError: true,
     );
     await _attach();
+  }
+
+  Future<void> _ensureStorageReady() async {
+    if (!_storageReady) await initialize();
+    if (!_storageReady) {
+      throw const DeviceException(
+        DeviceError.storage,
+        'Could not read your saved lights. Retry after unlocking Keychain before changing device connections.',
+      );
+    }
   }
 
   Future<void> setForeground(bool foreground) async {

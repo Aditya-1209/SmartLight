@@ -36,7 +36,57 @@ class FakeLight implements DeviceClient {
   }
 }
 
+class UnavailableCredentials extends MemoryCredentials {
+  bool unavailable = true;
+  int writes = 0;
+  @override
+  Future<ConnectionConfig?> read() async {
+    if (unavailable) throw StateError('test storage unavailable');
+    return super.read();
+  }
+
+  @override
+  Future<void> write(ConnectionConfig value) async {
+    writes++;
+    await super.write(value);
+  }
+}
+
 void main() {
+  test('Retry reloads credentials after a transient startup failure', () async {
+    final credentials = UnavailableCredentials()
+      ..config = ConnectionConfig([tapoConfig()]);
+    final container = testContainer(demo: false, credentials: credentials);
+    addTearDown(container.dispose);
+    final controller = container.read(appControllerProvider.notifier);
+    await controller.initialize();
+    expect(container.read(appControllerProvider).error, isNotNull);
+    credentials.unavailable = false;
+    await controller.refresh();
+    expect(
+      container.read(appControllerProvider).config?.devices.single.slotId,
+      'strip',
+    );
+    expect(container.read(appControllerProvider).connected, isTrue);
+  });
+  test('saving or removing cannot overwrite unread credentials', () async {
+    final credentials = UnavailableCredentials()
+      ..config = ConnectionConfig([tapoConfig()]);
+    final container = testContainer(demo: false, credentials: credentials);
+    addTearDown(container.dispose);
+    final controller = container.read(appControllerProvider.notifier);
+    await controller.initialize();
+    await expectLater(
+      controller.saveDevice(tapoConfig(name: 'New')),
+      throwsA(isA<DeviceException>()),
+    );
+    await expectLater(
+      controller.removeDevice('strip'),
+      throwsA(isA<DeviceException>()),
+    );
+    expect(credentials.writes, 0);
+    expect(credentials.config?.devices.single.name, 'Tapo Strip');
+  });
   test(
     'one disconnected light does not hide or disable its connected peer',
     () async {
