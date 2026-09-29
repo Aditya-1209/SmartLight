@@ -13,11 +13,12 @@ SmartLight on phone / Mac / Windows
   └─ Wipro/Tuya batten 2: encrypted local TCP
 ```
 
-The device running SmartLight is the controller. Connections and five-second polling stop in the background and resume when reopened. Everyday light controls run locally. An optional personal Android build includes Tuya’s SDK for pairing and retrieving device keys; this setup flow needs internet and closes its SDK connection when you leave it. No always-on server is required.
+The device running SmartLight is the controller. Connections and five-second polling stop in the background and resume when reopened. Everyday light controls run locally. Mac includes a setup-only Tuya Cloud/EZ pairing flow, and an optional personal Android build includes Tuya’s mobile SDK; this setup flow needs internet and closes its SDK connection when you leave it. No always-on server is required.
 
 - Responsive Material 3 dashboard, dark/light/system themes and per-light controls.
 - Room power, brightness, RGB presets/custom colors and Study/Movie/Chill/Sleep scenes.
 - Add lights one at a time; incomplete rooms remain usable.
+- Mac in-app fast-blinking (EZ) pairing using your own linked Central Europe Tuya project.
 - Optional Android in-app Wi-Fi pairing for compatible Wipro/Tuya lights (personal SDK build; hardware compatibility still needs testing).
 - Capabilities derived from device state; unsupported controls are hidden.
 - Separate failures for each light, foreground polling, manual refresh and diagnostics.
@@ -53,7 +54,7 @@ dart format --output=none --set-exit-if-changed .
 flutter analyze
 flutter test --coverage
 flutter test integration_test/demo_flow_test.dart -d macos
-flutter build macos
+tool/build_macos.sh
 flutter build windows  # Windows host only
 flutter build apk --debug
 # Android release: use your own strip IP; example address below is a placeholder.
@@ -63,6 +64,8 @@ SMARTLIGHT_TAPO_IP=192.168.1.50 flutter build apk --release \
 
 Android release HTTP is restricted to the build-time strip IP. An omitted IP leaves HTTP denied. Debug APKs use the existing development-only local HTTP policy. Builds currently use debug signing for personal testing, not store distribution. Install the ARM64 APK on Pixel 8; macOS builds run on Apple Silicon; Windows artifacts include the whole executable directory.
 
+For a personal Mac release, `tool/build_macos.sh` also verifies the final bundle signature and reseals an ad-hoc build if Flutter changed its nested framework during an incremental build. It does not replace a developer signing identity. Set `SMARTLIGHT_FLUTTER_BIN` if Flutter is not on PATH.
+
 For in-app Android pairing, see the [personal SDK build instructions](LOCAL_SETUP.md#build-the-optional-sdk-apk). SDK credentials/security files and the resulting personal APK must stay private; public CI builds exclude the SDK.
 
 GitHub Actions runs analysis/tests and builds Android debug, macOS release and Windows release on their respective hosts. Download artifacts from [Actions](https://github.com/Aditya-1209/SmartLight/actions). A green build does not establish device compatibility. See [VALIDATION.md](VALIDATION.md) and the [physical test checklist](REAL_DEVICE_TESTING.md).
@@ -71,7 +74,7 @@ GitHub Actions runs analysis/tests and builds Android debug, macOS release and W
 
 `lib/services/local/` owns encryption, framing, device transports and capability mapping. `LocalLightsRepository` combines independent connections; Riverpod manages room state and actions. Device operations are serialized to prevent polling/command races. Packet parsing bounds input sizes and verifies CRC/HMAC/GCM or KLAP signatures. Legacy Tapo AES and Tuya 3.3 have weaker security than KLAP and modern Tuya protocols; use a trusted home LAN.
 
-Credentials and local connection details are stored in platform secure storage. Only appearance/demo preferences and legacy non-sensitive slot data use preferences. Passwords/keys are masked and omitted from diagnostics/errors. The LAN control transports accept private/link-local IPv4 literals only, with no arbitrary URLs or HTTP redirects. The optional Android pairing SDK contacts Tuya services during setup. Never commit device exports, passwords or local keys. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for protocol references and licenses.
+Credentials and local connection details are stored in platform secure storage. Only appearance/demo preferences and legacy non-sensitive slot data use preferences. Passwords/keys are masked and omitted from diagnostics/errors. The LAN control transports accept private/link-local IPv4 literals only, with no arbitrary URLs or HTTP redirects. The Mac cloud setup client and optional Android pairing SDK contact Tuya only through their setup flows. Mac setup credentials are entered at runtime and saved in Keychain; they are never embedded in builds. Never commit device exports, passwords or local keys. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for protocol references and licenses.
 
 ## Screenshots
 

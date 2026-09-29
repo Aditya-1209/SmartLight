@@ -1,6 +1,6 @@
 # Connect your room directly
 
-SmartLight 2 talks to lights from the phone or computer running the app. Home Assistant, Docker, a VM, a hub and a background server are not required. Closing the app stops its connections; lights keep their last settings. App scenes run only when you tap them. The original vendor apps can handle initial Wi-Fi pairing and firmware. The optional Android pairing build can pair compatible Wipro/Tuya lights inside SmartLight.
+SmartLight 2 talks to lights from the phone or computer running the app. Home Assistant, Docker, a VM, a hub and a background server are not required. Closing the app stops its connections; lights keep their last settings. App scenes run only when you tap them. The original vendor apps can handle initial Wi-Fi pairing and firmware. Mac builds and the optional Android pairing build can pair compatible Wipro/Tuya lights inside SmartLight; hardware compatibility must still be tested.
 
 ## Start with the Tapo strip
 
@@ -19,6 +19,23 @@ Capabilities come from the device response. Some L920 firmware reports a fixed w
 
 **The exact SB22240 model has not been verified with this implementation.** A Wipro Next login is not sufficient for Tuya LAN control. Each compatible batten needs its local IPv4 address, device ID, a 16-byte local key, protocol version and light profile.
 
+### Pair inside SmartLight on Mac
+
+Mac setup uses Tuya Cloud OpenAPI plus an in-process Dart implementation of Tuya EZ (fast-blinking) provisioning. It does not require a phone, Docker, Home Assistant, Node, Python or a background helper. It currently targets a **Central Europe** Smart Home project and an India (`91`) pseudonymous user profile.
+
+1. In Tuya, create your own Smart Life SDK registration and link it to your existing Smart Home cloud project through **Devices → Link My App**. The project needs the applicable IoT Core, Authorization and Smart Home APIs. This is different from scanning a Wipro account QR code.
+2. In the Mac app, open **Settings → Wipro Tube → Pair inside SmartLight**. Enter the **cloud project's** Access ID/Secret and the SDK app's **schema**. These are not the Android SDK AppKey/AppSecret. **Check setup** verifies project access, creates/reuses a private profile, requests a test pairing token and retrieves existing devices before showing reset instructions. Credentials/profile stay in macOS Keychain, never in the compiled app, source or diagnostics.
+3. Only after the check succeeds, keep the Mac connected over Wi-Fi, enter your 2.4 GHz network name/password and select the Mac Wi-Fi interface. Put **one** tube into fast-blinking mode using its supplied instructions. Re-pairing may remove it from Wipro Next and changes its local key. Other lights should stay as they are.
+4. Confirm that only this tube is blinking and choose **Pair this tube**. Keep the app open for up to two minutes. The Wi-Fi password is used in memory for local setup and is not persisted. AP/slow-blinking mode is not implemented on Mac.
+5. The app retrieves the local key, listens for the light's LAN address/protocol, then returns to device settings. If discovery is unavailable, enter the local IP/protocol manually. Check the modern/legacy profile and choose **Connect & save**; the LAN connection must work before the light is stored.
+6. If pairing finishes after a timeout or the LAN connection fails, choose **Check setup** again and select the existing light. Do not reset repeatedly before checking for a completed pairing. Cancelling/closing the screen stops the setup HTTP and UDP sockets.
+
+Everyday commands use only the LAN transports. A Tuya developer trial expiring can prevent future pairing/retrieval, but the app does not call that API for lights whose working local credentials are already saved. No paid plan is automatically purchased. Keep the saved pairing profile. Connection details are not automatically synchronized to Android or Windows; provision their local credentials separately, without resetting the light again.
+
+The Mac release enables the sandbox's incoming-network entitlement for the short-lived UDP discovery listeners on ports 6666/6667/7000. No HTTP listener or persistent service is created. UDP discovery data is untrusted until the existing authenticated TCP connection test succeeds.
+
+References: [Tuya cloud signing](https://developer.tuya.com/en/docs/iot/new-singnature?id=Kbw0q34cs2e5g), [user registration](https://developer.tuya.com/en/docs/legacy-reference-of-cloud-service-apis/21707ff1ba?id=Kcojoa8xvg843), [TuyaAPI desktop provisioning reference](https://github.com/TuyaAPI/link).
+
 ### Pair inside SmartLight on Android (personal development build)
 
 This optional flow uses the official Tuya Smart Life SDK 7.8.0 during setup. It creates a pseudonymous pairing profile for this installation, stored with Flutter Secure Storage, and a home without geographical coordinates. It sends setup/device information to Tuya and supplies the home Wi-Fi credentials to the light. SmartLight does not retain the Wi-Fi password. India (`91`) is currently the profile country for this personal build. Existing Wipro accounts are not imported.
@@ -30,7 +47,7 @@ This optional flow uses the official Tuya Smart Life SDK 7.8.0 during setup. It 
 5. Pairing returns the device ID/key and, when available, a private IPv4 address, supported protocol version and light profile. If the SDK has no private IP or a recognized protocol, supply/check those fields yourself. Choose **Connect & save** to verify LAN access before the connection is stored.
 6. If pairing succeeded but the LAN test failed, reopen pairing and select the light under **Already paired here** to retrieve its details again. This does not reset the light. The SDK connection is closed when the pairing screen closes.
 
-The local controller used by normal lighting commands has not changed. Once valid connection details are stored, those commands do not use the SDK or Tuya developer cloud API. The SDK requires internet during pairing/refresh. SDK compatibility and real offline control on SB22240 remain unverified until a physical test succeeds. Keep the app's data: clearing it or uninstalling loses the installation's pairing profile. Updates using the same application ID and signing certificate preserve it. macOS and Windows can still use manually supplied local connection details; this release does not sync keys across devices.
+The local controller used by normal lighting commands has not changed. Once valid connection details are stored, those commands do not use the SDK or Tuya developer cloud API. The SDK requires internet during pairing/refresh. SDK compatibility and real offline control on SB22240 remain unverified until a physical test succeeds. Keep the app's data: clearing it or uninstalling loses the installation's pairing profile. Updates using the same application ID and signing certificate preserve it. Mac has the separate setup flow above; Windows uses supplied local connection details. This release does not sync keys across devices.
 
 The [Tuya SDK development edition](https://developer.tuya.com/en/docs/app-development/app-sdk-price?id=Kbu0tcr2cbx3o) is intended for noncommercial development/personal use with limits. Do not publish this private SDK APK on an app store or upload it as a public GitHub artifact. No paid subscription is needed to build this edition; terms/availability can change.
 

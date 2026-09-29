@@ -10,6 +10,7 @@ import '../../services/device_exception.dart';
 import '../../services/pairing/tuya_pairing.dart';
 import '../../widgets/common.dart';
 import 'wipro_pairing_screen.dart';
+import 'mac_wipro_pairing_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -131,7 +132,9 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
   Future<void> _pairWipro() async {
     final device = await Navigator.of(context).push<PairedTuyaDevice>(
       MaterialPageRoute(
-        builder: (_) => WiproPairingScreen(lightName: _name.text),
+        builder: (_) => Platform.isMacOS
+            ? MacWiproPairingScreen(lightName: _name.text)
+            : WiproPairingScreen(lightName: _name.text),
       ),
     );
     if (!mounted || device == null) return;
@@ -326,7 +329,7 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
           ),
           _field(_password, 'Tapo password', 'password', secret: true),
         ] else ...[
-          if (Platform.isAndroid) ...[
+          if (Platform.isAndroid || Platform.isMacOS) ...[
             OutlinedButton.icon(
               onPressed: _working ? null : _pairWipro,
               icon: const Icon(Icons.add_link),

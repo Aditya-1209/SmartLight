@@ -1,5 +1,15 @@
 # Direct-control validation record
 
+## 2026-09-29 — SmartLight 2.2.0 Mac pairing
+
+- Linked the existing SmartLight SDK app to the existing Central Europe cloud project after explicit user approval. No new paid plan or add-on was selected. The Wipro QR account link remains unused.
+- Added a Mac-only setup screen backed by Tuya Cloud OpenAPI and native Dart EZ Wi-Fi provisioning. The live release app successfully authenticated, verified the SDK app, registered its private profile, obtained a pairing token and retrieved its device list. Cloud setup credentials/profile are stored in macOS Keychain and survive independently of the source/build; no credentials are compiled or committed.
+- Implemented bounded HTTP setup requests, cancellation, safe error codes, stable profile recovery, byte-correct UTF-8 EZ encoding and short-lived UDP discovery. Discovery addresses are untrusted until the existing authenticated LAN connection test succeeds. Daily controls use the existing local transports.
+- All **78 tests passed** and `flutter analyze` reported no issues. New tests cover independent Python signing vectors, upstream @tuyapi/link encoding vectors (including UTF-8), token reuse, error redaction, cancellation during registration, profile recovery, discovery integrity/private addresses, and the Mac screen's access-check/reset gate.
+- Mac release **2.2.0 / build 6** built successfully (46.8 MB) and opened on this Mac. The initial full build emitted Xcode warnings about previously cleared precompiled-module cache paths; the final incremental build completed cleanly. An incremental build left the outer signature stale after replacing App.framework. Added a personal-build script that reseals ad-hoc builds only; final deep/strict code signature verification passed.
+- A startup storage error was observed in the native UI; the user subsequently showed the macOS login-Keychain permission dialog. That permission must be completed by the user. Fixed Retry to reload storage and prevented device saves/removals from overwriting unread saved connections; both behaviors have regression tests.
+- No tube was reset or paired by the agent. Actual SB22240 acceptance of desktop EZ provisioning, returned local key and LAN lighting controls still require the user's physical test. Mac AP/slow-blinking mode and automatic key transfer between Mac/Android/Windows are not implemented. Windows retains manual local setup; Android retains its optional mobile SDK pairing flow.
+
 ## 2026-09-29 — SmartLight 2.1.0 personal Android pairing
 
 - Created the Tuya Smart Life SDK development registration, accepted the SDK agreement with explicit user approval, and registered the local Android signing certificate. No paid edition or add-on was selected.
