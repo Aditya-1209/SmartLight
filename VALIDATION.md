@@ -1,5 +1,17 @@
 # Direct-control validation record
 
+## 2026-09-29 — SmartLight 2.1.0 personal Android pairing
+
+- Created the Tuya Smart Life SDK development registration, accepted the SDK agreement with explicit user approval, and registered the local Android signing certificate. No paid edition or add-on was selected.
+- Added optional SDK 7.8.0 pairing inside Android: persistent secure installation identity, home creation without coordinates, existing-device retrieval, EZ/AP pairing, permission handling, cancellation/timeouts and session cleanup. Ordinary lighting commands continue through the existing Dart LAN transports.
+- Analyzer passed. All 68 tests passed, including a phone-sized end-to-end widget test of consent → setup → pairing → returning connection details and closing the SDK session. These use fake SDK responses, not real Wipro hardware.
+- Native SDK bridge and the SDK-free fallback both compiled. A personal release APK was built and its signature, package/version, embedded private SDK configuration and packaged narrow Tapo HTTP policy were checked. Tuya's duplicate library namespaces require the scoped build-script compatibility setting; generated R8 rules cover unused Flutter Play Store split classes.
+- SDK keys/security component are git-ignored. Personal APKs are not uploaded to public CI. Signing remains the existing local debug certificate for sideloaded testing.
+- No Android device was attached. SDK startup, account registration, EZ/AP radio behavior, returned Wipro keys and real LAN control still need a Pixel/Wipro test. No tube was reset or re-paired during development. The user reported the Tapo strip already works.
+- macOS/Windows have no SDK pairing or automatic key transfer. Their preceding build results below are historical, not new 2.1.0 validation.
+
+## 2.0.2 baseline
+
 Date: 2026-09-28. SmartLight 2.0.2 fixes AES fallback after an empty KLAP HTTP 400 response and adds explicit HTTP wire framing. Version 2.0.1 added legacy Tapo AES (login v1) and replaced the misleading compatibility-setting error. The 2.0 release replaced Home Assistant with in-app Tapo/Tuya LAN clients.
 
 ## Automated checks
@@ -29,11 +41,11 @@ Baseline implementation: `3cd5a04`. Every push runs analysis, tests and all thre
 
 ## Physical verification and limitations
 
-**No successful physical light connection or command has been verified.** A read-only handshake to the user-provided Tapo IP could not be reached from this Mac. The user reports enabling Third-Party Compatibility and an empty HTTP 400 response at the initial KLAP handshake. Version 2.0.1 incorrectly stopped at that status before trying AES; 2.0.2 includes it in protocol selection. Read-only probes from the terminal still could not connect to port 80, so the strip’s actual protocol remains unconfirmed. No real Tapo password or Wipro local key was read or requested in chat.
+**The user subsequently confirmed the Tapo strip works. Wipro remains unverified.** The following Tapo investigation predates that confirmation. A read-only handshake to the user-provided Tapo IP could not be reached from this Mac. The user reports enabling Third-Party Compatibility and an empty HTTP 400 response at the initial KLAP handshake. Version 2.0.1 incorrectly stopped at that status before trying AES; 2.0.2 includes it in protocol selection. Read-only probes from the terminal still could not connect to port 80, so the strip’s actual protocol remains unconfirmed. No real Tapo password or Wipro local key was read or requested in chat.
 
 Wipro SB22240 compatibility, the Wipro Next-to-Tuya key provisioning route, exact datapoints and white range remain unverified. Tapo TPAP-only firmware, AES login v2 and Tuya 3.1/3.2/custom datapoints are not implemented. Automated protocol compatibility does not establish firmware compatibility.
 
-The app needs the lights' LAN addresses and credentials, but no Home Assistant, Docker, hub or server. Connections stop in the background. Vendor apps still handle initial pairing and firmware; the lack of a SmartLight cloud dependency does not guarantee every vendor device's firmware works indefinitely without internet.
+The app needs the lights' LAN addresses and credentials, but no Home Assistant, Docker, hub or server. Connections stop in the background. Vendor apps handle firmware. The optional Android SDK route requires Tuya internet access during setup. Local runtime commands do not imply every vendor device’s firmware works indefinitely without internet.
 
 Android release builds permit HTTP only to the private Tapo IP supplied through `SMARTLIGHT_TAPO_IP` at build time. With no value, HTTP stays denied. The local address is confined to generated build resources and optional build defines, not committed. A broader HTTP exception was rejected by automatic review and replaced with this scoped approach. Debug builds retain the prior development-only HTTP policy. Android release uses debug signing for personal testing; macOS is not notarized.
 

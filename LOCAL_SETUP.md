@@ -1,6 +1,6 @@
 # Connect your room directly
 
-SmartLight 2 talks to lights from the phone or computer running the app. Home Assistant, Docker, a VM, a hub and a background server are not required. Closing the app stops its connections; lights keep their last settings. App scenes run only when you tap them. The original vendor apps still handle initial Wi-Fi pairing, account ownership and firmware.
+SmartLight 2 talks to lights from the phone or computer running the app. Home Assistant, Docker, a VM, a hub and a background server are not required. Closing the app stops its connections; lights keep their last settings. App scenes run only when you tap them. The original vendor apps can handle initial Wi-Fi pairing and firmware. The optional Android pairing build can pair compatible Wipro/Tuya lights inside SmartLight.
 
 ## Start with the Tapo strip
 
@@ -18,6 +18,38 @@ Capabilities come from the device response. Some L920 firmware reports a fixed w
 ## Wipro Next Smart Home battens
 
 **The exact SB22240 model has not been verified with this implementation.** A Wipro Next login is not sufficient for Tuya LAN control. Each compatible batten needs its local IPv4 address, device ID, a 16-byte local key, protocol version and light profile.
+
+### Pair inside SmartLight on Android (personal development build)
+
+This optional flow uses the official Tuya Smart Life SDK 7.8.0 during setup. It creates a pseudonymous pairing profile for this installation, stored with Flutter Secure Storage, and a home without geographical coordinates. It sends setup/device information to Tuya and supplies the home Wi-Fi credentials to the light. SmartLight does not retain the Wi-Fi password. India (`91`) is currently the profile country for this personal build. Existing Wipro accounts are not imported.
+
+1. Install the **personal pairing APK** over the existing Android app. Keep its app data. Public CI APKs do not include this private SDK registration.
+2. Open Settings, expand one Wipro tube, and select **Pair inside SmartLight**. Continue with Tuya setup while connected to the internet. Android may request location access for Wi-Fi pairing, and Tuya's development edition may show a testing notice.
+3. Enter the 2.4 GHz Wi-Fi name and password. Put only that tube into the appropriate pairing mode using its supplied instructions. Re-pairing may remove it from Wipro Next and changes its local key. Do not reset both tubes as a test.
+4. Select fast blinking (EZ) or slow blinking (AP), confirm the tube is blinking, then **Prepare pairing**. For AP, get the token while still on home Wi-Fi, use **Open Wi-Fi settings** to join the tube's hotspot, and return before **Start pairing**. If a token expires, rejoin home Wi-Fi and prepare again.
+5. Pairing returns the device ID/key and, when available, a private IPv4 address, supported protocol version and light profile. If the SDK has no private IP or a recognized protocol, supply/check those fields yourself. Choose **Connect & save** to verify LAN access before the connection is stored.
+6. If pairing succeeded but the LAN test failed, reopen pairing and select the light under **Already paired here** to retrieve its details again. This does not reset the light. The SDK connection is closed when the pairing screen closes.
+
+The local controller used by normal lighting commands has not changed. Once valid connection details are stored, those commands do not use the SDK or Tuya developer cloud API. The SDK requires internet during pairing/refresh. SDK compatibility and real offline control on SB22240 remain unverified until a physical test succeeds. Keep the app's data: clearing it or uninstalling loses the installation's pairing profile. Updates using the same application ID and signing certificate preserve it. macOS and Windows can still use manually supplied local connection details; this release does not sync keys across devices.
+
+The [Tuya SDK development edition](https://developer.tuya.com/en/docs/app-development/app-sdk-price?id=Kbu0tcr2cbx3o) is intended for noncommercial development/personal use with limits. Do not publish this private SDK APK on an app store or upload it as a public GitHub artifact. No paid subscription is needed to build this edition; terms/availability can change.
+
+#### Build the optional SDK APK
+
+1. Register a Smart Life SDK app on Tuya with Android package `com.aditya.smartlight.smart_light`, obtain its Android AppKey/AppSecret, and register the SHA-256 of the signing certificate used by the build. This project currently uses the local Android debug certificate for personal release builds.
+2. Download the app-specific development SDK. Place its `security-algorithm-1.0.0-beta.aar` in `android/app/libs/`. This binary is ignored by Git.
+3. Copy `android/tuya.properties.example` to `android/tuya.properties` and enter the Android SDK keys. Keep this file private (mode 600). SDK credentials are embedded in the personal APK, as required by the vendor; they are not server secrets and the APK must stay private.
+4. Run:
+
+   ```sh
+   SMARTLIGHT_TAPO_IP=192.168.1.50 tool/build_pairing_android.sh
+   ```
+
+   Set `SMARTLIGHT_FLUTTER_BIN` if Flutter is not on PATH. Output: `build/distributions/SmartLight-Android-pairing.apk`. The script enables `smartlightTuya=true` and scopes AGP's shared-namespace compatibility setting to this SDK build. Ordinary Android/CI builds use a stub and require neither SDK secrets nor its proprietary security component.
+
+Reference: [Tuya Android integration](https://developer.tuya.com/en/docs/app-development/integrated?id=Ka69nt96cw0uj), [UID login](https://developer.tuya.com/en/docs/app-development/useruid?id=Ka6a99lybyr0k), [device information/localKey](https://developer.tuya.com/en/docs/app-development/devicemanage?id=Ka6ki8r2rfiuu).
+
+### Existing keys / developer QR alternative
 
 An existing Tuya/TinyTuya key export can provide these values. Otherwise the commonly documented one-time route is:
 

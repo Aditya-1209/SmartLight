@@ -69,3 +69,7 @@ tuya-raw.json
 .venv/
 
 /android/build/
+
+# Private, app-specific Tuya SDK configuration and security component.
+/android/tuya.properties
+/android/app/libs/security-algorithm*.aar

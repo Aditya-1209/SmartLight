@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,7 +7,9 @@ import '../../models/connection_config.dart';
 import '../../models/device_slot.dart';
 import '../../providers/app_controller.dart';
 import '../../services/device_exception.dart';
+import '../../services/pairing/tuya_pairing.dart';
 import '../../widgets/common.dart';
+import 'wipro_pairing_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -79,7 +83,7 @@ class SettingsScreen extends ConsumerWidget {
         const SizedBox(height: 24),
         const AboutListTile(
           applicationName: 'SmartLight',
-          applicationVersion: '2.0.2',
+          applicationVersion: '2.1.0',
           icon: Icon(Icons.info_outline),
         ),
         SectionCard(
@@ -123,6 +127,29 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
   TuyaProfile _profile = TuyaProfile.modern;
   bool _working = false, _reveal = false, _success = false;
   String? _message;
+
+  Future<void> _pairWipro() async {
+    final device = await Navigator.of(context).push<PairedTuyaDevice>(
+      MaterialPageRoute(
+        builder: (_) => WiproPairingScreen(lightName: _name.text),
+      ),
+    );
+    if (!mounted || device == null) return;
+    setState(() {
+      _id.text = device.deviceId;
+      _key.text = device.localKey;
+      _host.text = device.host;
+      if (device.version != null) _version = device.version!;
+      if (device.profile != null) _profile = device.profile!;
+      _success = true;
+      _message =
+          'Pairing details received. '
+          '${device.host.isEmpty ? 'Enter the light’s local IP address. ' : ''}'
+          '${device.version == null ? 'Check the local protocol version. ' : ''}'
+          'Use Connect & save to verify local control and save the connection.';
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -299,6 +326,14 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
           ),
           _field(_password, 'Tapo password', 'password', secret: true),
         ] else ...[
+          if (Platform.isAndroid) ...[
+            OutlinedButton.icon(
+              onPressed: _working ? null : _pairWipro,
+              icon: const Icon(Icons.add_link),
+              label: const Text('Pair inside SmartLight'),
+            ),
+            const SizedBox(height: 14),
+          ],
           const Padding(
             padding: EdgeInsets.only(bottom: 16),
             child: Text(
@@ -308,6 +343,7 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
           _field(_id, 'Device ID', 'device-id'),
           _field(_key, 'Local key (16 bytes)', 'local-key', secret: true),
           DropdownButtonFormField<TuyaVersion>(
+            key: ValueKey('protocol-${widget.slot.id}-${_version.name}'),
             initialValue: _version,
             decoration: const InputDecoration(
               labelText: 'Local protocol version',
@@ -324,6 +360,7 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
           ),
           const SizedBox(height: 14),
           DropdownButtonFormField<TuyaProfile>(
+            key: ValueKey('profile-${widget.slot.id}-${_profile.name}'),
             initialValue: _profile,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Light profile'),

@@ -1,6 +1,8 @@
 # Third-party notices
 
 SmartLight implements local wire protocols in Dart using Pointy Castle and crypto.
+
+Optional personal Android pairing builds include the proprietary Tuya Smart Life App SDK 7.8.0 and an app-specific security component. Tuya owns and licenses those components separately under its [Software License and Service Agreement](https://images.tuyacn.com/smart/docs/Software_License_and_Service_Agreement_EN.html). They are not covered by the local protocol references' MIT licenses. SDK credentials and the security component are excluded from this repository and ordinary CI builds. Tuya's development edition is for personal/noncommercial development and is not an app-store distribution license.
 Protocol format/algorithm references:
 
 - TinyTuya, https://github.com/jasonacox/tinytuya (MIT). Tuya protocol documentation, framing, session negotiation, light profiles. Independent test vectors generated with TinyTuya 1.20.0 and PyCryptodome; generator: tool/generate_protocol_vectors.py.

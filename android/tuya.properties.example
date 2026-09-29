@@ -1,0 +1,4 @@
+# Copy to tuya.properties (git-ignored). Use YOUR Android SDK keys.
+# Do not use Cloud Development Access ID/Secret or iOS SDK keys here.
+appKey=REPLACE_WITH_ANDROID_APP_KEY
+appSecret=REPLACE_WITH_ANDROID_APP_SECRET

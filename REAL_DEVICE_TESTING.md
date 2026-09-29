@@ -10,6 +10,9 @@ Automated protocol tests do not replace this checklist. Use a trusted room Wi-Fi
 | Add Tapo using IP and account credentials; test does not alter state | [ ] | [ ] | |
 | Use Tapo alone with both battens unconfigured | [ ] | [ ] | |
 | Wipro: establish SB22240 key export/account compatibility before any reset | [ ] | [ ] | |
+| Android: prepare SDK setup before resetting one tube; verify EZ/AP pairing returns a key | [ ] | [ ] | |
+| Android: cancel pairing, reopen setup and recover the paired light without resetting it | [ ] | [ ] | |
+| Android: reopen normal controls after pairing and confirm LAN operation with WAN disconnected | [ ] | [ ] | |
 | Add batten 1 with its own ID/key, version and matching datapoints | [ ] | [ ] | |
 | Add batten 2 with its distinct ID/key/IP | [ ] | [ ] | |
 | Verify correct warm/cool endpoints against the actual battens | [ ] | [ ] | |
