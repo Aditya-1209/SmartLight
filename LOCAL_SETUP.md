@@ -29,6 +29,8 @@ All controllers must be on the same LAN as the lights (2.4/5 GHz can coexist aft
 
 **The exact SB22240 model has not been verified with this implementation.** A Wipro Next login is not sufficient for Tuya LAN control. Each compatible batten needs its local IPv4 address, device ID, a 16-byte local key, protocol version and light profile.
 
+New Wipro connections use **Auto — test 3.3, 3.4 and 3.5** for the local protocol. With an IP and paired credentials entered, **Test connection** sends only status queries, closes each attempt, and selects the first version that returns a verified, usable light state. **Connect & save** verifies and stores the selected version. Existing saved connections keep their version; Auto remains available in the dropdown. This checks protocols at the entered address, not the whole network, and cannot compensate for a mismatched IP/key. Timeout messages distinguish opening TCP from the session handshake or status request. Pairing can return a cloud/public IP or no IP; only a private LAN address is accepted.
+
 ### Pair inside SmartLight on Mac
 
 Mac setup uses Tuya Cloud OpenAPI plus an in-process Dart implementation of Tuya EZ (fast-blinking) provisioning. It does not require a phone, Docker, Home Assistant, Node, Python or a background helper. It currently targets a **Central Europe** Smart Home project and an India (`91`) pseudonymous user profile.

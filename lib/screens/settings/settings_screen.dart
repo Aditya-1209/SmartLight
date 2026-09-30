@@ -100,7 +100,7 @@ class SettingsScreen extends ConsumerWidget {
         const SizedBox(height: 24),
         const AboutListTile(
           applicationName: 'SmartLight',
-          applicationVersion: '2.3.0',
+          applicationVersion: '2.3.1',
           icon: Icon(Icons.info_outline),
         ),
         SectionCard(
@@ -144,6 +144,7 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
   TuyaVersion _version = TuyaVersion.v33;
   TuyaProfile _profile = TuyaProfile.modern;
   bool _working = false, _reveal = false, _success = false;
+  bool _autoProtocol = true;
   String? _message;
 
   Future<void> _pairWipro() async {
@@ -160,12 +161,13 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
       _key.text = device.localKey;
       _host.text = device.host;
       if (device.version != null) _version = device.version!;
+      _autoProtocol = true;
       if (device.profile != null) _profile = device.profile!;
       _success = true;
       _message =
           'Pairing details received. '
           '${device.host.isEmpty ? 'Enter the light’s local IP address. ' : ''}'
-          '${device.version == null ? 'Check the local protocol version. ' : ''}'
+          'The local protocol will be detected when you test the connection. '
           'Use Connect & save to verify local control and save the connection.';
     });
   }
@@ -178,6 +180,7 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
         d?.brand ??
         (widget.slot.id == 'strip' ? DeviceBrand.tapo : DeviceBrand.tuya);
     _version = d?.version ?? TuyaVersion.v33;
+    _autoProtocol = d == null;
     _profile = d?.profile ?? TuyaProfile.modern;
     _name = TextEditingController(text: d?.name ?? widget.slot.name);
     _host = TextEditingController(
@@ -210,6 +213,7 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
         d?.brand ??
         (widget.slot.id == 'strip' ? DeviceBrand.tapo : DeviceBrand.tuya);
     _version = d?.version ?? TuyaVersion.v33;
+    _autoProtocol = d == null;
     _profile = d?.profile ?? TuyaProfile.modern;
     _name.text = d?.name ?? widget.slot.name;
     _host.text = d?.host ?? '';
@@ -252,12 +256,33 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
       _message = null;
     });
     try {
-      final config = _config();
+      var config = _config();
       final controller = ref.read(appControllerProvider.notifier);
+      final detect = config.brand == DeviceBrand.tuya && _autoProtocol;
+      if (detect) {
+        config = await controller.detectTuyaProtocol(
+          config,
+          stillWanted: () => mounted,
+          onTrying: (version) {
+            if (mounted) {
+              setState(() {
+                _success = false;
+                _message =
+                    'Checking Tuya ${DeviceConnection.versionText(version)}…';
+              });
+            }
+          },
+        );
+        if (!mounted) return;
+        setState(() {
+          _version = config.version;
+          _autoProtocol = false;
+        });
+      }
       if (save) {
         _localSave = config;
         await controller.saveDevice(config);
-      } else {
+      } else if (!detect) {
         await controller.inspectDevice(config);
       }
       if (mounted) {
@@ -394,22 +419,36 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
           ),
           _field(_id, 'Device ID', 'device-id'),
           _field(_key, 'Local key (16 bytes)', 'local-key', secret: true),
-          DropdownButtonFormField<TuyaVersion>(
+          DropdownButtonFormField<String>(
             isExpanded: true,
-            key: ValueKey('protocol-${widget.slot.id}-${_version.name}'),
-            initialValue: _version,
+            key: ValueKey(
+              'protocol-${widget.slot.id}-${_autoProtocol ? 'auto' : _version.name}',
+            ),
+            initialValue: _autoProtocol ? 'auto' : _version.name,
             decoration: const InputDecoration(
               labelText: 'Local protocol version',
             ),
-            items: TuyaVersion.values
-                .map(
-                  (v) => DropdownMenuItem(
-                    value: v,
-                    child: Text(DeviceConnection.versionText(v)),
-                  ),
-                )
-                .toList(),
-            onChanged: _working ? null : (v) => setState(() => _version = v!),
+            items: [
+              const DropdownMenuItem(
+                value: 'auto',
+                child: Text('Auto — test 3.3, 3.4 and 3.5'),
+              ),
+              ...TuyaVersion.values.map(
+                (v) => DropdownMenuItem(
+                  value: v.name,
+                  child: Text(DeviceConnection.versionText(v)),
+                ),
+              ),
+            ],
+            onChanged: _working
+                ? null
+                : (v) => setState(() {
+                    _autoProtocol = v == 'auto';
+                    if (!_autoProtocol) {
+                      _version = TuyaVersion.values.byName(v!);
+                    }
+                    _message = null;
+                  }),
           ),
           const SizedBox(height: 14),
           DropdownButtonFormField<TuyaProfile>(

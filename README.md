@@ -18,6 +18,7 @@ The device running SmartLight is the controller. Connections and five-second pol
 - Responsive Material 3 dashboard, dark/light/system themes and per-light controls.
 - Room power, brightness, RGB presets/custom colors and Study/Movie/Chill/Sleep scenes.
 - Add lights one at a time; incomplete rooms remain usable.
+- Detect the Tuya LAN protocol during setup using read-only checks for 3.3, 3.4 and 3.5.
 - Pair once, then transfer saved connections between Mac, Android and Windows using a password-protected setup code. Import lets you review the lights and keeps other saved connections.
 - Mac in-app fast-blinking (EZ) pairing using your own linked Central Europe Tuya project.
 - Optional Android in-app Wi-Fi pairing for compatible Wipro/Tuya lights (personal SDK build; hardware compatibility still needs testing).

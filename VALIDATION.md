@@ -1,5 +1,14 @@
 # Direct-control validation record
 
+## 2026-09-30 — SmartLight 2.3.1 Tuya protocol detection
+
+- The personal 2.3.0 APK was installed on the Pixel 8. The user subsequently reported both battens paired, and the SDK screen listed two existing devices, but returned no usable LAN address. Two candidate addresses accepted TCP connections on port 6668 from the Pixel; discovery did not confirm their device-ID mapping. The user reported both candidates timing out with protocol 3.3. This establishes neither a wrong key nor a working local-control connection.
+- Added setup-only **Auto** protocol selection: try the preferred version and the remaining supported 3.3/3.4/3.5 versions, stop on a verified usable status, and close each attempt. Tests do not send lighting commands or save unverified candidates. The successful version is selected in the form and verified again before saving. Existing saved connections keep their version.
+- Tuya timeouts now identify TCP connection, session handshake, status request or control request. A connection reset after TCP opens is distinguished from an unreachable host so protocol detection can continue. Combined detection failures expose fixed error categories, not credentials or arbitrary error details. Detection stops on network unreachability or when setup is abandoned.
+- Analyzer and formatting checks passed; all **90 tests passed**. The final connection-reset classification also passed the **22 affected protocol/detection tests**. New coverage includes fallback/early success, attempt disposal, no writes/control commands during detection, error redaction, cancellation, real-socket timeout stages and a phone-sized Auto → test → save flow.
+- Personal Android ARM64 pairing release **2.3.1 / build 8** built successfully (44.4 MB). APK package/version and the existing signing certificate were verified. An in-place update completed successfully on the authorized Pixel 8; the package manager confirmed version 2.3.1 / build 8. App data was not cleared. The personal APK remains local.
+- Wipro local control still requires a successful physical connection test. No additional reset, cloud account, paid service or always-on process is required by this change.
+
 ## 2026-09-29 — SmartLight 2.3.0 setup transfer
 
 - Added password-protected setup codes shared by Android, macOS and Windows. Only saved light connections are exported; Wi-Fi passwords and developer/SDK pairing profiles are excluded. AES-256-GCM uses a fresh salt/nonce, PBKDF2-HMAC-SHA256 with 600,000 iterations, authenticated version context and bounded input. Key derivation runs in a background isolate. Clipboard writes require the user's Copy action.

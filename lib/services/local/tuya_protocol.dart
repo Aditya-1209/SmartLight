@@ -174,6 +174,25 @@ Stream<Uint8List> tuyaFrames(
 
 typedef TuyaConnector = Future<Socket> Function(String host, int port);
 
+enum TuyaConnectionStage { connecting, handshake, status, control }
+
+class TuyaTimeoutException extends DeviceException {
+  const TuyaTimeoutException(this.stage)
+    : super(
+        stage == TuyaConnectionStage.connecting
+            ? DeviceError.unreachable
+            : DeviceError.timeout,
+        stage == TuyaConnectionStage.connecting
+            ? 'TCP connection timed out. Check the light’s IP, power and Wi-Fi.'
+            : stage == TuyaConnectionStage.handshake
+            ? 'TCP connected, but the session handshake timed out.'
+            : stage == TuyaConnectionStage.status
+            ? 'TCP connected, but the status request timed out.'
+            : 'TCP connected, but the control request timed out.',
+      );
+  final TuyaConnectionStage stage;
+}
+
 class TuyaTransport {
   TuyaTransport(
     this.config, {
@@ -204,6 +223,7 @@ class TuyaTransport {
       );
     }
     StreamIterator<Uint8List>? incoming;
+    var stage = TuyaConnectionStage.connecting;
     try {
       final socket = await _connector(config.host, 6668).timeout(timeout);
       if (_disposed) {
@@ -243,6 +263,7 @@ class TuyaTransport {
       }
 
       if (codec.modern) {
+        stage = TuyaConnectionStage.handshake;
         final local = randomBytes(16);
         send(3, local);
         final reply = (await receive({4})).payload;
@@ -261,6 +282,9 @@ class TuyaTransport {
             ? aesGcm(mixed, codec.key, local.sublist(0, 12)).sublist(0, 16)
             : aesBlock(mixed, codec.key, padding: false);
       }
+      stage = dps == null
+          ? TuyaConnectionStage.status
+          : TuyaConnectionStage.control;
       final time = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       Future<Map<String, dynamic>> request() async {
         final query = dps == null;
@@ -325,15 +349,16 @@ class TuyaTransport {
     } catch (error) {
       if (error is DeviceException) rethrow;
       if (error is TimeoutException) {
-        throw const DeviceException(
-          DeviceError.timeout,
-          'Light timed out. Check Wi-Fi, its IP address and protocol version. Close other local controllers.',
-        );
+        throw TuyaTimeoutException(stage);
       }
       if (error is SocketException) {
-        throw const DeviceException(
-          DeviceError.unreachable,
-          'Cannot reach this light. Join the same Wi-Fi and check its power and IP address.',
+        throw DeviceException(
+          stage == TuyaConnectionStage.connecting
+              ? DeviceError.unreachable
+              : DeviceError.malformed,
+          stage == TuyaConnectionStage.connecting
+              ? 'Cannot reach this light. Join the same Wi-Fi and check its power and IP address.'
+              : 'The light closed its TCP connection before a usable reply. Check its local key and protocol version.',
         );
       }
       _authRetryAt = DateTime.now().add(const Duration(minutes: 1));

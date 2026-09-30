@@ -16,6 +16,7 @@ import '../services/connection_status.dart';
 import '../services/demo_lights.dart';
 import '../services/secure_storage_service.dart';
 import '../services/local/device_client.dart';
+import '../services/local/tuya_protocol.dart';
 
 final credentialStoreProvider = Provider<CredentialStore>(
   (ref) => SecureStorageService(),
@@ -271,6 +272,62 @@ class AppController extends Notifier<AppState> {
     } finally {
       backend.dispose();
     }
+  }
+
+  /// Setup-only status queries. Never sends power/color commands or saves an
+  /// unverified candidate; each attempt disposes its own transport.
+  Future<DeviceConnection> detectTuyaProtocol(
+    DeviceConnection device, {
+    void Function(TuyaVersion)? onTrying,
+    bool Function()? stillWanted,
+  }) async {
+    if (device.brand != DeviceBrand.tuya) {
+      throw const DeviceException(
+        DeviceError.invalidUrl,
+        'Choose a Wipro / Tuya light.',
+      );
+    }
+    final failures = <String>[];
+    for (final version in {device.version, ...TuyaVersion.values}) {
+      if (_disposed || (stillWanted != null && !stillWanted())) {
+        throw const DeviceException(
+          DeviceError.unavailable,
+          'Connection check cancelled.',
+        );
+      }
+      final candidate = DeviceConnection.fromJson({
+        ...device.toJson(),
+        'version': version.name,
+      });
+      onTrying?.call(version);
+      try {
+        final light = await inspectDevice(candidate);
+        if (!light.available) {
+          throw const DeviceException(
+            DeviceError.unavailable,
+            'No usable light state.',
+          );
+        }
+        return candidate;
+      } on DeviceException catch (error) {
+        if (error.kind == DeviceError.unreachable) rethrow;
+        // Only our fixed categories reach the UI, never a parser/vendor error.
+        final reason = switch (error.kind) {
+          DeviceError.timeout =>
+            error is TuyaTimeoutException ? error.message : 'No response.',
+          DeviceError.unauthorized => 'Local key rejected.',
+          DeviceError.malformed =>
+            'Reply could not be verified or did not match the light profile.',
+          DeviceError.server => 'Request rejected by the light.',
+          _ => 'No usable light state.',
+        };
+        failures.add('${DeviceConnection.versionText(version)}: $reason');
+      }
+    }
+    throw DeviceException(
+      DeviceError.unavailable,
+      'Could not verify this light with any supported protocol.\n${failures.join('\n')}\nCheck the other light IP, or select the paired light again to refresh its local key.',
+    );
   }
 
   Future<void> saveDevice(DeviceConnection device) =>
