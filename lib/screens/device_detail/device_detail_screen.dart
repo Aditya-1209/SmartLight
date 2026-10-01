@@ -59,7 +59,7 @@ class DeviceDetailScreen extends ConsumerWidget {
                   Text(
                     light?.available == true
                         ? 'Connected'
-                        : light == null
+                        : light == null && slot.entityId == null
                         ? 'Add this light in Settings'
                         : 'Unavailable',
                   ),

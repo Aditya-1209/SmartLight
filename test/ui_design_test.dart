@@ -14,6 +14,9 @@ import 'package:smart_light/repositories/settings_repository.dart';
 
 import 'support.dart';
 
+import 'package:smart_light/widgets/light_card.dart';
+import 'package:smart_light/models/device_slot.dart';
+
 const goldenHour = LightScene(
   'custom-golden-hour',
   'Golden hour',
@@ -26,6 +29,32 @@ const goldenHour = LightScene(
 );
 
 void main() {
+  testWidgets('saved light without a reply is not presented as unpaired', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LightCard(
+            slot: const DeviceSlot(
+              id: 'tube1',
+              name: 'Wipro Tube 1',
+              entityId: 'light.saved',
+            ),
+            light: null,
+            busy: false,
+            onOpen: () {},
+            onPower: null,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Waiting for light'), findsOneWidget);
+    expect(find.text('View light'), findsOneWidget);
+    expect(find.text('Set up light'), findsNothing);
+  });
+
   for (final size in [
     const Size(412, 915),
     const Size(1440, 1000),

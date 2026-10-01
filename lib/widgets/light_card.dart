@@ -35,7 +35,9 @@ class LightCard extends StatelessWidget {
     final accent = colour ? materialColor(light!.rgbColor!) : LightPalette.warm;
     final temperature = light?.colorTempKelvin;
     final description = light == null
-        ? 'Add this light in Settings'
+        ? slot.entityId == null
+              ? 'Add this light in Settings'
+              : 'Waiting for light'
         : !available
         ? 'Not reachable'
         : !on
@@ -144,7 +146,9 @@ class LightCard extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: TextButton(
                     onPressed: onOpen,
-                    child: Text(light == null ? 'Set up light' : 'View light'),
+                    child: Text(
+                      slot.entityId == null ? 'Set up light' : 'View light',
+                    ),
                   ),
                 ),
               ),

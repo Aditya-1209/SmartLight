@@ -7,7 +7,10 @@
 - Kept all app identifiers, secure-storage keys, preference formats, protocol/pairing code and connection transfer unchanged. Existing custom scenes, device mappings and credentials remain compatible. Saving a scene does not apply it. Saved confirmation provides a separate Apply action.
 - Static analysis passed. All **103 tests passed**, including setup, encrypted transfers, persistence/credential-write guards, scene workflows and mobile/desktop UI checks.
 - Rendered and reviewed the actual Flutter UI at 360 × 800, 412 × 915 and 1440 × 1000, using simulated lights only. Preview captures are in the ignored build/ui-review directory.
-- Platform packaging results are recorded below once complete. Android installation remains deferred; the personal pairing APK stays local.
+- Mac release 2.5.0 / build 10 built successfully and passed deep/strict signature verification. Native UI inspection confirmed the new interface and **three saved connections** after relaunch. Lights were unreachable during this inspection; no commands or configuration writes were made.
+- The personal Android pairing APK built successfully with the unchanged app ID and build 10; installation remains deferred and the personal APK stays local.
+- A follow-up UI regression distinguishes a saved light awaiting its response from an unpaired light; static analysis and all four targeted UI tests passed after that correction.
+- Windows source is ready locally. Uploading source/assets to GitHub for the Windows runner was blocked by automatic approval review pending explicit user authorization. No remote push or PR creation occurred.
 
 ## 2026-10-01 — SmartLight 2.4.0 custom scenes and interface update
 
