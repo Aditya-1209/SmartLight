@@ -6,7 +6,8 @@ import '../models/light_entity.dart';
 import '../services/connection_status.dart';
 import '../services/device_exception.dart';
 import '../services/local/device_client.dart';
-import '../services/local/tapo_client.dart';
+import '../services/local/auto_tapo_client.dart';
+import '../services/local/tapo_discovery.dart';
 import '../services/local/tuya_client.dart';
 
 abstract interface class LightsRepository {
@@ -23,18 +24,32 @@ abstract interface class LightsRepository {
 typedef DeviceClientFactory = DeviceClient Function(DeviceConnection config);
 
 class LocalLightsRepository implements LightsRepository {
-  LocalLightsRepository(this.config, {DeviceClientFactory? factory}) {
+  LocalLightsRepository(
+    this.config, {
+    DeviceClientFactory? factory,
+    DeviceClientFactory? tapoClientFactory,
+    TapoDiscover? tapoDiscover,
+  }) {
     for (final device in config.devices) {
       _clients[device.entityId] =
           factory?.call(device) ??
           (device.brand == DeviceBrand.tapo
-              ? TapoClient(device)
+              ? AutoTapoClient(
+                  device,
+                  factory: tapoClientFactory,
+                  discover: tapoDiscover,
+                  onResolved: (event) {
+                    if (!_disposed) _connections.add(event);
+                  },
+                )
               : TuyaClient(device));
     }
   }
   final ConnectionConfig config;
   final _clients = <String, DeviceClient>{};
   final _statuses = StreamController<ConnectionStatus>.broadcast();
+  final _connections = StreamController<ResolvedConnection>.broadcast();
+  Stream<ResolvedConnection> get connectionUpdates => _connections.stream;
   bool _disposed = false;
   @override
   Stream<LightEntity> get updates => const Stream.empty();
@@ -93,5 +108,6 @@ class LocalLightsRepository implements LightsRepository {
       client.dispose();
     }
     unawaited(_statuses.close());
+    unawaited(_connections.close());
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/connection_config.dart';
+import '../../services/local/tapo_discovery.dart';
 import '../../models/device_slot.dart';
 import '../../providers/app_controller.dart';
 import '../../services/device_exception.dart';
@@ -14,6 +15,10 @@ import '../diagnostics/diagnostics_screen.dart';
 import 'wipro_pairing_screen.dart';
 import 'mac_wipro_pairing_screen.dart';
 import 'setup_transfer_screen.dart';
+
+final tapoDiscoveryProvider = Provider<TapoDiscover>(
+  (ref) => TapoDiscovery.discover,
+);
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -219,6 +224,64 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
   bool _working = false, _reveal = false, _success = false;
   bool _autoProtocol = true;
   String? _message;
+  String _macAddress = '';
+
+  Future<void> _findTapo() async {
+    setState(() {
+      _working = true;
+      _message = 'Looking for Tapo lights on your Wi-Fi…';
+      _success = false;
+    });
+    try {
+      final lights = await ref.read(tapoDiscoveryProvider)();
+      if (!mounted) return;
+      if (lights.isEmpty) {
+        setState(
+          () => _message = 'No Tapo lights found. Keep the strip powered and join the same Wi-Fi, then try again.',
+        );
+        return;
+      }
+      final selected = await showDialog<TapoDiscoveredLight>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: const Text('Choose your Tapo light'),
+          children: [
+            for (final light in lights)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, light),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(light.model),
+                      Text(
+                        '${light.host} · ${light.macAddress}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+      if (!mounted || selected == null) return;
+      setState(() {
+        _host.text = selected.host;
+        _macAddress = selected.macAddress;
+        _message = 'Light found. Choose Connect & save to verify it and remember it when its address changes.';
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _message = 'Could not search this network. Join your home Wi-Fi and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
 
   Future<void> _pairWipro() async {
     final device = await Navigator.of(context).push<PairedTuyaDevice>(
@@ -249,6 +312,7 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
   void initState() {
     super.initState();
     final d = widget.saved;
+    _macAddress = d?.macAddress ?? '';
     _brand =
         d?.brand ??
         (widget.slot.id == 'strip' ? DeviceBrand.tapo : DeviceBrand.tuya);
@@ -277,11 +341,24 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
     if (identical(widget.saved, oldWidget.saved)) return;
     // A save from this form already has the right fields and success feedback.
     // Imports, by contrast, must replace the old form and clear its status.
-    if (_localSave != null && identical(widget.saved, _localSave)) {
+    if (_sameDeviceSettings(widget.saved, _localSave)) {
+      _host.text = widget.saved!.host;
+      _macAddress = widget.saved!.macAddress;
       _localSave = null;
       return;
     }
     final d = widget.saved;
+    final old = oldWidget.saved;
+    if (d != null &&
+        old != null &&
+        d.brand == DeviceBrand.tapo &&
+        _sameDeviceSettings(d, old)) {
+      // Background reconnection must not replace unfinished edits in this form.
+      if (_host.text == old.host) _host.text = d.host;
+      if (_macAddress == old.macAddress) _macAddress = d.macAddress;
+      return;
+    }
+    _macAddress = d?.macAddress ?? '';
     _brand =
         d?.brand ??
         (widget.slot.id == 'strip' ? DeviceBrand.tapo : DeviceBrand.tuya);
@@ -300,6 +377,21 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
     _success = false;
     _reveal = false;
   }
+
+  bool _sameDeviceSettings(DeviceConnection? a, DeviceConnection? b) =>
+      a != null &&
+      b != null &&
+      a.slotId == b.slotId &&
+      a.name == b.name &&
+      a.brand == b.brand &&
+      a.email == b.email &&
+      a.password == b.password &&
+      a.deviceId == b.deviceId &&
+      a.localKey == b.localKey &&
+      a.version == b.version &&
+      a.profile == b.profile &&
+      a.minKelvin == b.minKelvin &&
+      a.maxKelvin == b.maxKelvin;
 
   @override
   void dispose() {
@@ -322,6 +414,7 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
     profile: _profile,
     minKelvin: int.tryParse(_min.text) ?? 0,
     maxKelvin: int.tryParse(_max.text) ?? 0,
+    macAddress: _brand == DeviceBrand.tapo ? _macAddress : '',
   );
   Future<void> _connect(bool save) async {
     setState(() {
@@ -356,7 +449,19 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
         _localSave = config;
         await controller.saveDevice(config);
       } else if (!detect) {
-        await controller.inspectDevice(config);
+        final light = await controller.inspectDevice(config);
+        if (mounted && config.brand == DeviceBrand.tapo) {
+          setState(() {
+            _host.text =
+                light.rawAttributes['connection_host'] as String? ??
+                config.host;
+            _macAddress =
+                DeviceConnection.normalizeMac(
+                  light.rawAttributes['device_mac'],
+                ) ??
+                config.macAddress;
+          });
+        }
       }
       if (mounted) {
         setState(() {
@@ -462,6 +567,21 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
           keyboard: TextInputType.number,
         ),
         if (_brand == DeviceBrand.tapo) ...[
+          OutlinedButton.icon(
+            onPressed: _working ? null : _findTapo,
+            icon: const Icon(Icons.wifi_find),
+            label: const Text('Find Tapo light'),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              _macAddress.isEmpty
+                  ? 'Find and save your strip once to reconnect automatically when its IP changes.'
+                  : widget.saved?.macAddress == _macAddress
+                  ? 'SmartLight remembers this light and finds its new address automatically.'
+                  : 'Connect & save to remember this light when its address changes.',
+            ),
+          ),
           const Padding(
             padding: EdgeInsets.only(bottom: 16),
             child: Text(

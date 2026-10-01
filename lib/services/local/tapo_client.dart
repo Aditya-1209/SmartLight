@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -13,6 +14,7 @@ import 'crypto_utils.dart';
 import 'device_client.dart';
 import 'tapo_aes.dart';
 import 'tapo_http_client.dart';
+import 'tapo_lan_http_client.dart';
 
 /// Tapo KLAP v1/v2. Wire-format references and licenses: THIRD_PARTY_NOTICES.md.
 class KlapCipher {
@@ -58,7 +60,10 @@ class TapoClient implements DeviceClient {
     http.Client Function()? clientFactory,
     this.timeout = const Duration(seconds: 8),
   }) : _clientFactory =
-           clientFactory ?? (() => TapoHttpClient(timeout: timeout));
+           clientFactory ??
+           (() => Platform.isAndroid
+               ? TapoLanHttpClient(timeout: timeout)
+               : TapoHttpClient(timeout: timeout));
   final DeviceConnection config;
   final Duration timeout;
   final http.Client Function() _clientFactory;
@@ -394,6 +399,7 @@ class TapoClient implements DeviceClient {
       friendlyName: config.name,
       state: info['device_on'] == true ? 'on' : 'off',
       attributes: {
+        'device_mac': DeviceConnection.normalizeMac(info['mac']),
         'brightness': percentToBrightness(level ?? 100),
         if (hue != null && saturation != null)
           'rgb_color': hsvToRgb(hue, saturation / 100).toJson(),

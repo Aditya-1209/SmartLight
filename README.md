@@ -61,12 +61,11 @@ flutter test integration_test/demo_flow_test.dart -d macos
 tool/build_macos.sh
 flutter build windows  # Windows host only
 flutter build apk --debug
-# Android release: use your own strip IP; example address below is a placeholder.
-SMARTLIGHT_TAPO_IP=192.168.1.50 flutter build apk --release \
-  --target-platform android-arm64 --dart-define=SMARTLIGHT_TAPO_IP=192.168.1.50
+# Android release supports changing local Tapo addresses.
+flutter build apk --release --target-platform android-arm64
 ```
 
-Android release HTTP is restricted to the build-time strip IP. An omitted IP leaves HTTP denied. Debug APKs use the existing development-only local HTTP policy. Builds currently use debug signing for personal testing, not store distribution. Install the ARM64 APK on Pixel 8; macOS builds run on Apple Silicon; Windows artifacts include the whole executable directory.
+Tapo connections on Android use a bounded private-IPv4 transport, so changing addresses do not require a rebuild. General release HTTP stays denied. Debug APKs use the existing development-only local HTTP policy. Builds currently use debug signing for personal testing, not store distribution. Install the ARM64 APK on Pixel 8; macOS builds run on Apple Silicon; Windows artifacts include the whole executable directory.
 
 For a personal Mac release, `tool/build_macos.sh` also verifies the final bundle signature and reseals an ad-hoc build if Flutter changed its nested framework during an incremental build. It does not replace a developer signing identity. Set `SMARTLIGHT_FLUTTER_BIN` if Flutter is not on PATH.
 

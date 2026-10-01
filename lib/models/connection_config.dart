@@ -24,7 +24,15 @@ class DeviceConnection {
     this.profile = TuyaProfile.modern,
     this.minKelvin = 2700,
     this.maxKelvin = 6500,
-  }) : host = host.trim() {
+    String macAddress = '',
+  }) : host = host.trim(),
+       macAddress = normalizeMac(macAddress) ?? '' {
+    if (macAddress.isNotEmpty && this.macAddress.isEmpty) {
+      throw const DeviceException(
+        DeviceError.invalidUrl,
+        'Invalid light hardware address.',
+      );
+    }
     if (!{'tube1', 'tube2', 'strip'}.contains(slotId) || name.trim().isEmpty) {
       throw const DeviceException(
         DeviceError.invalidUrl,
@@ -59,6 +67,7 @@ class DeviceConnection {
     }
   }
   final String slotId, name, host, email, password, deviceId, localKey;
+  final String macAddress;
   final DeviceBrand brand;
   final TuyaVersion version;
   final TuyaProfile profile;
@@ -72,6 +81,27 @@ class DeviceConnection {
     TuyaVersion.v34 => '3.4',
     TuyaVersion.v35 => '3.5',
   };
+  static String? normalizeMac(Object? value) {
+    if (value is! String) return null;
+    final compact = value.trim().replaceAll(RegExp('[:-]'), '').toUpperCase();
+    if (!RegExp(r'^[0-9A-F]{12}$').hasMatch(compact) ||
+        compact == '000000000000' ||
+        compact == 'FFFFFFFFFFFF' ||
+        int.parse(compact.substring(0, 2), radix: 16).isOdd) {
+      return null;
+    }
+    return List.generate(
+      6,
+      (i) => compact.substring(i * 2, i * 2 + 2),
+    ).join(':');
+  }
+
+  DeviceConnection withAddress({String? host, String? macAddress}) =>
+      DeviceConnection.fromJson({
+        ...toJson(),
+        'host': host ?? this.host,
+        'macAddress': macAddress ?? this.macAddress,
+      });
   // Literal private/link-local addresses prevent credential redirects and DNS rebinding.
   static bool isLocalAddress(String host) {
     final ip = InternetAddress.tryParse(host);
@@ -96,6 +126,7 @@ class DeviceConnection {
     'profile': profile.name,
     'minKelvin': minKelvin,
     'maxKelvin': maxKelvin,
+    'macAddress': macAddress,
   };
   factory DeviceConnection.fromJson(Map<String, dynamic> json) =>
       DeviceConnection(
@@ -113,6 +144,7 @@ class DeviceConnection {
         ),
         minKelvin: json['minKelvin'] as int? ?? 2700,
         maxKelvin: json['maxKelvin'] as int? ?? 6500,
+        macAddress: json['macAddress'] as String? ?? '',
       );
   @override
   String toString() => 'DeviceConnection($slotId, credentials redacted)';

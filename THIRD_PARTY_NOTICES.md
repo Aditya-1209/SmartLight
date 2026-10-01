@@ -8,7 +8,7 @@ Protocol format/algorithm references:
 - TinyTuya, https://github.com/jasonacox/tinytuya (MIT). Tuya protocol documentation, framing, session negotiation, light profiles. Independent test vectors generated with TinyTuya 1.20.0 and PyCryptodome; generator: tool/generate_protocol_vectors.py.
 - PyP100, https://github.com/fishbigger/TapoP100 (MIT). Legacy RSA key exchange, AES-CBC secure passthrough, and login v1 wire format.
 - esp-tapo, https://github.com/Alejandro12120/esp-tapo (MIT). KLAP session derivation and encrypted transport description. SmartLight additionally verifies response signatures.
-- python-kasa's public L920 fixtures were consulted for device capability facts; no Python runtime or python-kasa source is bundled.
+- python-kasa's public L920 fixtures and UDP discovery packet format (https://github.com/python-kasa/python-kasa/blob/master/kasa/discover.py) were consulted for device capability and wire-format facts; no Python runtime or python-kasa source is bundled.
 
 
 MIT License

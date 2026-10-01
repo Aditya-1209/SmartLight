@@ -16,6 +16,7 @@ import '../services/connection_status.dart';
 import '../services/demo_lights.dart';
 import '../services/secure_storage_service.dart';
 import '../services/local/device_client.dart';
+import '../services/local/auto_tapo_client.dart';
 import '../services/local/tuya_protocol.dart';
 
 final credentialStoreProvider = Provider<CredentialStore>(
@@ -120,6 +121,7 @@ class AppController extends Notifier<AppState> {
   LightsRepository? _backend;
   StreamSubscription<LightEntity>? _updates;
   StreamSubscription<ConnectionStatus>? _statuses;
+  StreamSubscription<ResolvedConnection>? _connections;
   Timer? _fallbackRefresh;
   int _generation = 0;
   bool _disposed = false;
@@ -176,6 +178,7 @@ class AppController extends Notifier<AppState> {
     _fallbackRefresh?.cancel();
     unawaited(_updates?.cancel());
     unawaited(_statuses?.cancel());
+    unawaited(_connections?.cancel());
     _backend?.dispose();
     _backend = null;
     _revisions.clear();
@@ -197,6 +200,40 @@ class AppController extends Notifier<AppState> {
       state.settings.demo,
     );
     _backend = backend;
+    if (backend is LocalLightsRepository) {
+      _connections = backend.connectionUpdates.listen((event) {
+        unawaited(
+          _configurationQueue.run(() async {
+            if (_disposed || generation != _generation) return;
+            final devices = state.config?.devices;
+            final saved = devices
+                ?.where((d) => d.slotId == event.previous.slotId)
+                .firstOrNull;
+            if (saved == null ||
+                saved.host != event.previous.host ||
+                saved.macAddress != event.previous.macAddress) {
+              return;
+            }
+            try {
+              final config = ConnectionConfig([
+                for (final device in devices!)
+                  device.slotId == saved.slotId ? event.current : device,
+              ]);
+              await ref.read(credentialStoreProvider).write(config);
+              if (!_disposed && generation == _generation) {
+                state = state.copyWith(config: config);
+              }
+            } catch (_) {
+              if (!_disposed && generation == _generation) {
+                state = state.copyWith(
+                  error: 'Tapo reconnected, but its new address could not be saved. Check Keychain access.',
+                );
+              }
+            }
+          }),
+        );
+      });
+    }
     state = AppState(
       settings: state.settings,
       config: state.config,
@@ -338,12 +375,20 @@ class AppController extends Notifier<AppState> {
       _configurationQueue.run(() => _saveDevice(device));
   Future<void> _saveDevice(DeviceConnection device) async {
     await _ensureStorageReady();
+    final light = await inspectDevice(device);
+    if (device.brand == DeviceBrand.tapo) {
+      device = device.withAddress(
+        host: light.rawAttributes['connection_host'] as String?,
+        macAddress: DeviceConnection.normalizeMac(
+          light.rawAttributes['device_mac'],
+        ),
+      );
+    }
     final devices = [
       ...?state.config?.devices.where((d) => d.slotId != device.slotId),
       device,
     ];
     final config = ConnectionConfig(devices);
-    final light = await inspectDevice(device);
     if (!light.available) {
       throw const DeviceException(
         DeviceError.unavailable,

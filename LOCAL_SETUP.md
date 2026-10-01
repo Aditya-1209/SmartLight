@@ -5,9 +5,9 @@ SmartLight 2 talks to lights from the phone or computer running the app. Home As
 ## Start with the Tapo strip
 
 1. Keep the strip powered and join the same home Wi-Fi on your phone/Mac/Windows PC. Avoid a guest network with client isolation.
-2. In Tapo, open the strip's settings and find its IP address under Device Info. Reserve this address in your router if possible.
+2. In SmartLight, open **Settings → Connected lights → Tapo Strip → Find Tapo light** and select your strip. You can also enter its current IP from Tapo → Device Info.
 3. Enable **Third-Party Compatibility** in Tapo if your app/firmware offers it (the location varies by app version; look in Tapo Lab or third-party services).
-4. In SmartLight, choose **Add your lights → Tapo Strip**. Enter the IP, your Tapo account email (preserve capitalization) and password. Enter credentials only in the app, not in chat or source files.
+4. In SmartLight, open your Tapo Strip settings. Confirm the selected light and enter your Tapo account email (preserve capitalization) and password. Enter credentials only in the app, not in chat or source files.
 5. Choose **Test connection**, then **Connect & save**. This checks the light without changing its power or color. You can use just this strip while the battens remain unconfigured.
 6. Return to My Room. Try power, brightness and color. The app reads device state after each command and every five seconds in the foreground.
 
@@ -71,7 +71,7 @@ The [Tuya SDK development edition](https://developer.tuya.com/en/docs/app-develo
 4. Run:
 
    ```sh
-   SMARTLIGHT_TAPO_IP=192.168.1.50 tool/build_pairing_android.sh
+   tool/build_pairing_android.sh
    ```
 
    Set `SMARTLIGHT_FLUTTER_BIN` if Flutter is not on PATH. Output: `build/distributions/SmartLight-Android-pairing.apk`. The script enables `smartlightTuya=true` and scopes AGP's shared-namespace compatibility setting to this SDK build. Ordinary Android/CI builds use a stub and require neither SDK secrets nor its proprietary security component.
@@ -98,17 +98,19 @@ An existing Tuya/TinyTuya key export can provide these values. Otherwise the com
 
 If SB22240 cannot be linked/exported through a supported account, or exposes different datapoints, Wipro control remains blocked until its provisioning/profile is established. SmartLight cannot invent or discover a secret local key from an IP address. A factory reset or re-pair can change an existing key. Tuya 3.1/3.2 and arbitrary/custom datapoint mappings are outside this version.
 
-## Android's narrow HTTP exception
+## Automatic Tapo reconnection
 
-Tapo uses encrypted KLAP or legacy AES messages over HTTP on port 80. Android release builds default to denying HTTP. Build with `SMARTLIGHT_TAPO_IP` to allow **only your strip's private IPv4 address**. The generated exception stays in ignored build output; your address is not committed. Runtime destinations are also restricted to literal private/link-local IPv4 addresses and redirects are refused.
+After a successful status read, SmartLight stores the light's verified MAC address alongside its existing credentials. If its IP stops working, a short local UDP search finds the same MAC and an authenticated device-info read confirms it before saving a new IP. Searches are limited to one per 30 seconds during failures and run only while the app is active. The light must remain powered and reachable on the same LAN. An uncertain lighting command is never replayed.
+
+Older saved connections without a hardware identity keep working at their saved IP and learn the MAC on their next successful read. If that old IP has already changed, use **Find Tapo light**, select the strip, then **Connect & save** once. The app does not guess which discovered light is yours. Setup transfers carry the identity and latest saved address to other platforms. UDP discovery can be blocked by guest Wi-Fi, VPN routing or a desktop firewall; manual IP entry remains available.
+
+## Android local Tapo transport
+
+Android no longer needs a build-time strip address. Its dedicated Tapo socket transport allows only POST requests to the supported Tapo paths on port 80 at literal private/link-local IPv4 addresses. It has bounded request/response sizes and timeouts, refuses redirects, and performs no DNS or proxy lookup. Tapo payloads still use the existing encrypted KLAP or legacy AES session. The Android release network-security XML continues to deny general HTTP traffic; there is no global cleartext exception. Tuya keeps its encrypted TCP connection on port 6668.
 
 ```sh
-# Replace this example with your strip's address.
-SMARTLIGHT_TAPO_IP=192.168.1.50 flutter build apk --release \
-  --target-platform android-arm64 --dart-define=SMARTLIGHT_TAPO_IP=192.168.1.50
+flutter build apk --release --target-platform android-arm64
 ```
-
-The optional Dart define prefills the address in setup. If the strip changes address, reserve the old address in your router or rebuild with the new address. Debug APKs retain the development-only HTTP policy. Release APKs without the environment variable do not permit Tapo HTTP connections. Tuya uses its own encrypted TCP connection on port 6668.
 
 ## Troubleshooting
 
