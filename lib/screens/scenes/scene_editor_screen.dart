@@ -299,13 +299,16 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
 
   Widget _lightCard(String id, String name, LightEntity? light) {
     final draft = _drafts[id]!;
-    final minKelvin = light?.minColorTempKelvin.toDouble() ?? 2000;
-    final maxKelvin = light?.maxColorTempKelvin.toDouble() ?? 6500;
-    final supportsBrightness = light?.supportsBrightness ?? true;
+    // An offline placeholder has no capability data. Keep the editor usable
+    // offline; the transport will adapt the saved scene when a light returns.
+    final capabilities = light?.available == true ? light : null;
+    final minKelvin = capabilities?.minColorTempKelvin.toDouble() ?? 2000;
+    final maxKelvin = capabilities?.maxColorTempKelvin.toDouble() ?? 6500;
+    final supportsBrightness = capabilities?.supportsBrightness ?? true;
     final modes = <String, String>{
       'keep': 'Keep color',
-      if (light?.supportsTemperature ?? true) 'white': 'White',
-      if (light?.supportsRgb ?? true) 'color': 'Color',
+      if (capabilities?.supportsTemperature ?? true) 'white': 'White',
+      if (capabilities?.supportsRgb ?? true) 'color': 'Color',
     };
     // Preserve a saved choice even when a currently connected replacement light
     // has different capabilities; the local transport adapts supported fields.

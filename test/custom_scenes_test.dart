@@ -11,6 +11,8 @@ import 'package:smart_light/models/scene.dart';
 import 'package:smart_light/providers/app_controller.dart';
 import 'package:smart_light/repositories/settings_repository.dart';
 import 'package:smart_light/services/demo_lights.dart';
+import 'package:smart_light/screens/scenes/scene_editor_screen.dart';
+import 'package:smart_light/widgets/brightness_slider.dart';
 import 'package:smart_light/services/device_exception.dart';
 
 import 'support.dart';
@@ -47,6 +49,17 @@ class DurableSettings extends MemorySettings {
       jsonDecode(jsonEncode(settings.toJson())) as Map<String, dynamic>,
     );
   }
+}
+
+class OfflineConfigured extends ConfiguredDemo {
+  OfflineConfigured(super.config);
+  @override
+  Future<LightEntity> getLight(String id) async => LightEntity(
+    entityId: id,
+    friendlyName: 'Offline fixture',
+    state: 'unavailable',
+    attributes: {},
+  );
 }
 
 Future<void> reveal(WidgetTester tester, Finder finder) async {
@@ -261,6 +274,55 @@ void main() {
       expect(credentials.writes, 0);
     },
   );
+
+  testWidgets('offline placeholders retain brightness and color editing', (
+    tester,
+  ) async {
+    final config = ConnectionConfig([tapoConfig()]);
+    final credentials = MemoryCredentials()..config = config;
+    final container = testContainer(
+      demo: false,
+      credentials: credentials,
+      backend: OfflineConfigured(config),
+    );
+    addTearDown(container.dispose);
+    await tester.runAsync(
+      () => container.read(appControllerProvider.notifier).initialize(),
+    );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: SceneEditorScreen(
+            scene: LightScene('custom-offline', 'Offline scene', '', {
+              'strip': LightCommand(brightnessPercent: 35, kelvin: 3000),
+            }),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await reveal(tester, find.byKey(const ValueKey('scene-mode-strip-white')));
+    final modes = tester.widget<DropdownButtonFormField<String>>(
+      find.byKey(const ValueKey('scene-mode-strip-white')),
+    );
+    // The color option must be usable even when no capabilities were returned.
+    await tester.tap(find.byKey(const ValueKey('scene-mode-strip-white')));
+    await tester.pumpAndSettle();
+    expect(find.text('Color'), findsOneWidget);
+    await tester.tap(find.text('Color'));
+    await tester.pumpAndSettle();
+    expect(modes.enabled, true);
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is ValueSlider && w.label == 'Brightness',
+      ),
+      findsOneWidget,
+    );
+    await reveal(tester, find.text('Scene color'));
+    expect(find.text('Scene color'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   for (final size in [
     const Size(390, 844),
