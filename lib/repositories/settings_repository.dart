@@ -4,29 +4,35 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/device_slot.dart';
+import '../models/scene.dart';
 
 class AppSettings {
   const AppSettings({
     this.theme = ThemeMode.system,
     this.demo = false,
     this.slots = DeviceSlot.defaults,
+    this.customScenes = const [],
   });
   final ThemeMode theme;
   final bool demo;
   final List<DeviceSlot> slots;
+  final List<LightScene> customScenes;
   AppSettings copyWith({
     ThemeMode? theme,
     bool? demo,
     List<DeviceSlot>? slots,
+    List<LightScene>? customScenes,
   }) => AppSettings(
     theme: theme ?? this.theme,
     demo: demo ?? this.demo,
     slots: slots ?? this.slots,
+    customScenes: customScenes ?? this.customScenes,
   );
   Map<String, dynamic> toJson() => {
     'theme': theme.name,
     'demo': demo,
     'slots': slots.map((s) => s.toJson()).toList(),
+    'customScenes': customScenes.map((s) => s.toJson()).toList(),
   };
   factory AppSettings.fromJson(Map<String, dynamic> json) {
     final raw = json['slots'];
@@ -49,7 +55,21 @@ class AppSettings {
             : null,
       );
     }).toList();
+    final scenes = <LightScene>[];
+    final rawScenes = json['customScenes'];
+    if (rawScenes is List) {
+      for (final rawScene in rawScenes.take(LightScene.maxCustomScenes)) {
+        try {
+          if (rawScene is! Map<String, dynamic>) continue;
+          final scene = LightScene.fromJson(rawScene);
+          if (!scenes.any((s) => s.id == scene.id)) scenes.add(scene);
+        } on FormatException {
+          // A damaged scene must not discard the user's other preferences.
+        }
+      }
+    }
     return AppSettings(
+      customScenes: List.unmodifiable(scenes),
       demo: json['demo'] == true,
       theme:
           ThemeMode.values.where((t) => t.name == json['theme']).firstOrNull ??

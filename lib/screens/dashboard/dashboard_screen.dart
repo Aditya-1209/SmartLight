@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/light_command.dart';
 import '../../models/light_entity.dart';
-import '../../models/scene.dart';
 import '../../providers/app_controller.dart';
 import '../../widgets/brightness_slider.dart';
 import '../../widgets/color_picker.dart';
@@ -13,8 +12,9 @@ import '../../widgets/scene_card.dart';
 import '../device_detail/device_detail_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
-  const DashboardScreen({super.key, required this.onSetup});
+  const DashboardScreen({super.key, required this.onSetup, this.onScenes});
   final VoidCallback onSetup;
+  final VoidCallback? onScenes;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(appControllerProvider);
@@ -41,7 +41,7 @@ class DashboardScreen extends ConsumerWidget {
         PageHeading(
           'My Room',
           state.configured
-              ? '$onCount lights on · Make yourself at home.'
+              ? '$onCount ${onCount == 1 ? 'light is' : 'lights are'} on · Make yourself at home.'
               : 'Your room, in sync. Let’s connect your lights.',
           trailing: IconButton(
             tooltip: 'Refresh lights',
@@ -92,8 +92,19 @@ class DashboardScreen extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(26),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(28),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).colorScheme.primary.withValues(alpha: .15),
+                  Theme.of(context).colorScheme.surfaceContainerLow,
+                ],
+              ),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.primary
+                    .withValues(alpha: .2),
+              ),
+              borderRadius: BorderRadius.circular(24),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -157,17 +168,24 @@ class DashboardScreen extends ConsumerWidget {
                       : null,
                 ),
                 if (mapped.any((l) => l.supportsRgb == true)) ...[
-                  const SizedBox(height: 12),
-                  const Text('A touch of color'),
-                  const SizedBox(height: 12),
-                  LightColorPicker(
-                    custom: false,
-                    onSelected: enabled
-                        ? (rgb) => runAction(
-                            context,
-                            controller.controlAll(LightCommand(rgb: rgb)),
-                          )
-                        : null,
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    shape: const Border(),
+                    collapsedShape: const Border(),
+                    title: const Text('Room color'),
+                    leading: const Icon(Icons.palette_outlined, size: 20),
+                    childrenPadding: const EdgeInsets.only(bottom: 12),
+                    children: [
+                      LightColorPicker(
+                        custom: false,
+                        onSelected: enabled
+                            ? (rgb) => runAction(
+                                context,
+                                controller.controlAll(LightCommand(rgb: rgb)),
+                              )
+                            : null,
+                      ),
+                    ],
                   ),
                 ],
               ],
@@ -175,7 +193,20 @@ class DashboardScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 30),
         ],
-        Text('Your lights', style: Theme.of(context).textTheme.titleLarge),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Your lights',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            Text(
+              '${mapped.where((l) => l.available).length} connected',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
         const SizedBox(height: 16),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -217,7 +248,17 @@ class DashboardScreen extends ConsumerWidget {
           },
         ),
         const SizedBox(height: 30),
-        Text('Set the mood', style: Theme.of(context).textTheme.titleLarge),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Set the mood',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            TextButton(onPressed: onScenes, child: const Text('All scenes')),
+          ],
+        ),
         const SizedBox(height: 16),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -225,7 +266,8 @@ class DashboardScreen extends ConsumerWidget {
             return Wrap(
               spacing: 12,
               runSpacing: 12,
-              children: LightScene.defaults
+              children: state.scenes
+                  .take(4)
                   .map(
                     (scene) => SizedBox(
                       width:

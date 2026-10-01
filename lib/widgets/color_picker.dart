@@ -23,11 +23,13 @@ class LightColorPicker extends StatefulWidget {
     required this.onSelected,
     this.current,
     this.custom = true,
+    this.applyLabel = 'Apply color',
     super.key,
   });
   final ValueChanged<RgbColor>? onSelected;
   final RgbColor? current;
   final bool custom;
+  final String applyLabel;
   @override
   State<LightColorPicker> createState() => _LightColorPickerState();
 }
@@ -114,7 +116,7 @@ class _LightColorPickerState extends State<LightColorPicker> {
                   Icons.circle,
                   color: materialColor(RgbColor(_rgb[0], _rgb[1], _rgb[2])),
                 ),
-                label: const Text('Apply color'),
+                label: Text(widget.applyLabel),
               ),
             ),
           ],

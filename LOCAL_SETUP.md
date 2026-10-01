@@ -27,7 +27,7 @@ All controllers must be on the same LAN as the lights (2.4/5 GHz can coexist aft
 
 ## Wipro Next Smart Home battens
 
-**The exact SB22240 model has not been verified with this implementation.** A Wipro Next login is not sufficient for Tuya LAN control. Each compatible batten needs its local IPv4 address, device ID, a 16-byte local key, protocol version and light profile.
+The user confirmed Wipro control on Android after SDK pairing and automatic protocol detection. Other firmware versions still need testing. A Wipro Next login is not sufficient for Tuya LAN control. Each compatible batten needs its local IPv4 address, device ID, a 16-byte local key, protocol version and light profile.
 
 New Wipro connections use **Auto — test 3.3, 3.4 and 3.5** for the local protocol. With an IP and paired credentials entered, **Test connection** sends only status queries, closes each attempt, and selects the first version that returns a verified, usable light state. **Connect & save** verifies and stores the selected version. Existing saved connections keep their version; Auto remains available in the dropdown. This checks protocols at the entered address, not the whole network, and cannot compensate for a mismatched IP/key. Timeout messages distinguish opening TCP from the session handshake or status request. Pairing can return a cloud/public IP or no IP; only a private LAN address is accepted.
 
@@ -120,3 +120,11 @@ The optional Dart define prefills the address in setup. If the strip changes add
 - **One light offline:** other connected lights remain usable; room actions report failures by light.
 - **App reopened:** foreground connections are recreated and refreshed. There is no always-on process.
 - **Several controllers:** some Tuya firmware permits one local connection. Close other local controllers; SmartLight closes each Tuya connection after its operation.
+
+## Custom scenes and updates (2.4.0)
+
+Open **Scenes → New scene**. Enter a name, choose an icon, and select the lights to include. For each included light, choose on/off, brightness (or leave it unchanged), and white/color settings. **Use current light settings** captures only lights currently available; offline lights are left unchecked. Saving a scene does not change the lights. Activate it from Scenes or the four quick-access scene cards on My Room.
+
+Use a scene's **⋮** menu to edit, duplicate, or delete it. Deletion offers **Undo**. Built-in presets remain available and can be duplicated. Up to 60 custom scenes are stored on each device. Scenes are local preferences, not automatically synchronized; the existing encrypted setup transfer carries light connections only.
+
+Update the existing app in place. Bundle/package IDs, secure-storage keys, pairing profiles, light settings and transfer format are unchanged. The preferences format adds optional custom scenes and reads older settings without a reset. On Android, install an update signed with the same certificate; do not uninstall or clear app data. macOS may ask for login-Keychain access after an app rebuild; grant it in the system dialog and use Retry if needed. Scene, theme and connection-setting writes are serialized to preserve simultaneous changes.

@@ -88,7 +88,10 @@ class _AppShellState extends ConsumerState<AppShell>
     final scheme = Theme.of(context).colorScheme;
     final wide = MediaQuery.sizeOf(context).width >= 850;
     final screen = switch (_page) {
-      0 => DashboardScreen(onSetup: () => _select(3)),
+      0 => DashboardScreen(
+        onSetup: () => _select(3),
+        onScenes: () => _select(1),
+      ),
       1 => const ScenesScreen(),
       2 => const DiagnosticsScreen(),
       _ => const SettingsScreen(),
@@ -101,7 +104,9 @@ class _AppShellState extends ConsumerState<AppShell>
                 children: [
                   Icon(Icons.lightbulb_outline),
                   SizedBox(width: 10),
-                  Text('SmartLight'),
+                  Flexible(
+                    child: Text('SmartLight', overflow: TextOverflow.ellipsis),
+                  ),
                 ],
               ),
               actions: [

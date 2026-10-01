@@ -68,24 +68,43 @@ class SectionCard extends StatelessWidget {
 }
 
 class StatusBadge extends StatelessWidget {
-  const StatusBadge(this.label, {super.key, this.good = true});
+  const StatusBadge(
+    this.label, {
+    super.key,
+    this.good = true,
+    this.neutral = false,
+  });
   final String label;
   final bool good;
+  final bool neutral;
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: good ? scheme.secondaryContainer : scheme.errorContainer,
+        color: neutral
+            ? scheme.surfaceContainerHighest
+            : good
+            ? scheme.primary.withValues(alpha: .12)
+            : scheme.errorContainer,
         borderRadius: BorderRadius.circular(30),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            good ? Icons.check_circle_outline : Icons.cloud_off_outlined,
+            neutral
+                ? Icons.add_circle_outline
+                : good
+                ? Icons.check_circle_outline
+                : Icons.cloud_off_outlined,
             size: 15,
+            color: neutral
+                ? scheme.onSurfaceVariant
+                : good
+                ? scheme.primary
+                : scheme.onErrorContainer,
           ),
           const SizedBox(width: 6),
           Flexible(

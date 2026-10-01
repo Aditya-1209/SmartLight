@@ -2,7 +2,7 @@
 
 A Flutter app for controlling one room directly over Wi-Fi from **Android, macOS and Windows**. Open the app when you are in the room; no Home Assistant, Docker, virtual machine or always-on computer is required.
 
-The intended room contains two Wipro SB22240 RGB/CCT battens and a Tapo L920 strip. The user has confirmed the Tapo strip works. Wipro local control is implemented and tested against protocol fixtures and simulated devices; **physical SB22240 compatibility and key provisioning remain unverified**. See [LOCAL_SETUP.md](LOCAL_SETUP.md) before resetting or moving any lights.
+The intended room contains two Wipro SB22240 RGB/CCT battens and a Tapo L920 strip. The user has confirmed Tapo control and Wipro control on Android after in-app pairing and automatic protocol detection. This is verification of the user's setup, not a guarantee for every firmware version. See [LOCAL_SETUP.md](LOCAL_SETUP.md) before resetting or moving any lights.
 
 ## How it works
 
@@ -17,11 +17,12 @@ The device running SmartLight is the controller. Connections and five-second pol
 
 - Responsive Material 3 dashboard, dark/light/system themes and per-light controls.
 - Room power, brightness, RGB presets/custom colors and Study/Movie/Chill/Sleep scenes.
+- Custom scenes with names, icons, per-light power/brightness/white/color, current-state capture, editing, duplication and undoable deletion. Saving does not send light commands.
 - Add lights one at a time; incomplete rooms remain usable.
 - Detect the Tuya LAN protocol during setup using read-only checks for 3.3, 3.4 and 3.5.
 - Pair once, then transfer saved connections between Mac, Android and Windows using a password-protected setup code. Import lets you review the lights and keeps other saved connections.
 - Mac in-app fast-blinking (EZ) pairing using your own linked Central Europe Tuya project.
-- Optional Android in-app Wi-Fi pairing for compatible Wipro/Tuya lights (personal SDK build; hardware compatibility still needs testing).
+- Optional Android in-app Wi-Fi pairing for compatible Wipro/Tuya lights (personal SDK build).
 - Capabilities derived from device state; unsupported controls are hidden.
 - Separate failures for each light, foreground polling, manual refresh and diagnostics.
 - Demo mode with three simulated lights and outage controls; saved credentials remain separate.
@@ -33,7 +34,7 @@ The device running SmartLight is the controller. Connections and five-second pol
 | Tapo | KLAP v1/v2 or legacy AES (login v1), power, brightness, HSV/RGB, adjustable CCT where reported | Light IP + owning Tapo account email/password; Third-Party Compatibility where offered |
 | Compatible Wipro/Tuya Wi-Fi lights | LAN 3.3/3.4/3.5; modern DP20–24 and legacy DP1–5 profiles | IP + device ID + local key + actual protocol/profile |
 
-Tapo TPAP-only firmware, AES login v2, Tuya 3.1/3.2, vendor effects, music synchronization and arbitrary datapoint profiles are not supported. The SB22240 profile and key-export path must be verified on the real hardware. A Wipro Next password alone will not connect a batten.
+Tapo TPAP-only firmware, AES login v2, Tuya 3.1/3.2, vendor effects, music synchronization and arbitrary datapoint profiles are not supported. A Wipro Next password alone will not connect a batten.
 
 ## Run
 

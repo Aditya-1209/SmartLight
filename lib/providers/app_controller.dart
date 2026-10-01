@@ -71,6 +71,10 @@ class AppState {
           );
         }).toList();
   LightEntity? lightFor(DeviceSlot slot) => lights[slot.entityId];
+  List<LightScene> get scenes => [
+    ...settings.customScenes,
+    ...LightScene.defaults,
+  ];
   AppState copyWith({
     AppSettings? settings,
     ConnectionConfig? config,
@@ -436,17 +440,60 @@ class AppController extends Notifier<AppState> {
     }
   }
 
-  Future<void> setDemo(bool value) async {
+  Future<void> setDemo(bool value) => _configurationQueue.run(() async {
+    await _ensureStorageReady();
     final settings = state.settings.copyWith(demo: value);
     await ref.read(settingsStoreProvider).write(settings);
     if (_disposed) return;
     state = AppState(config: state.config, settings: settings);
     await _attach();
-  }
+  });
 
-  Future<void> setTheme(ThemeMode theme) async {
+  Future<void> setTheme(ThemeMode theme) => _configurationQueue.run(() async {
+    await _ensureStorageReady();
     final settings = state.settings.copyWith(theme: theme);
     await ref.read(settingsStoreProvider).write(settings);
+    if (!_disposed) state = state.copyWith(settings: settings);
+  });
+
+  Future<void> saveScene(LightScene scene) => _configurationQueue.run(() async {
+    await _ensureStorageReady();
+    final validated = LightScene.fromJson(scene.toJson());
+    final scenes = [...state.settings.customScenes];
+    final index = scenes.indexWhere((s) => s.id == validated.id);
+    if (index < 0) {
+      if (scenes.length >= LightScene.maxCustomScenes) {
+        throw const DeviceException(
+          DeviceError.storage,
+          'You can save up to 60 custom scenes. Delete one to make room.',
+        );
+      }
+      scenes.add(validated);
+    } else {
+      scenes[index] = validated;
+    }
+    await _saveScenes(scenes);
+  });
+
+  Future<void> deleteScene(String id) => _configurationQueue.run(() async {
+    await _ensureStorageReady();
+    await _saveScenes(
+      state.settings.customScenes.where((s) => s.id != id).toList(),
+    );
+  });
+
+  Future<void> _saveScenes(List<LightScene> scenes) async {
+    final settings = state.settings.copyWith(
+      customScenes: List.unmodifiable(scenes),
+    );
+    try {
+      await ref.read(settingsStoreProvider).write(settings);
+    } catch (_) {
+      throw const DeviceException(
+        DeviceError.storage,
+        'Could not save scenes. Your previous scenes and light connections are unchanged.',
+      );
+    }
     if (!_disposed) state = state.copyWith(settings: settings);
   }
 

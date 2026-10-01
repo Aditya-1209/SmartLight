@@ -49,6 +49,7 @@ class LightCard extends StatelessWidget {
                           ? 'Online'
                           : 'Unavailable',
                       good: light?.available == true,
+                      neutral: light == null,
                     ),
                   ),
                   IconButton.filledTonal(
@@ -65,10 +66,10 @@ class LightCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 18),
               AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
-                height: 72,
+                height: 64,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
@@ -103,7 +104,7 @@ class LightCard extends StatelessWidget {
                         ),
                       ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               Text(slot.name, style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 6),
               Text(
@@ -116,7 +117,8 @@ class LightCard extends StatelessWidget {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  if (light?.rgbColor != null) ...[
+                  if (light?.rgbColor != null &&
+                      light?.rawAttributes['color_mode'] != 'color_temp') ...[
                     Icon(
                       Icons.circle,
                       color: materialColor(light!.rgbColor!),
@@ -126,11 +128,16 @@ class LightCard extends StatelessWidget {
                   ],
                   Expanded(
                     child: Text(
-                      light?.colorTempKelvin != null
-                          ? '${light!.colorTempKelvin} K'
+                      light?.colorTempKelvin != null &&
+                              light?.rawAttributes['color_mode'] == 'color_temp'
+                          ? '${light!.colorTempKelvin! < 3500
+                                ? 'Warm'
+                                : light!.colorTempKelvin! > 5000
+                                ? 'Cool'
+                                : 'Soft'} white · ${light!.colorTempKelvin} K'
                           : light?.rgbColor != null
-                          ? 'RGB ${light!.rgbColor!.toJson().join(', ')}'
-                          : 'Power control',
+                          ? 'Color lighting'
+                          : 'Light controls',
                       style: Theme.of(context).textTheme.labelMedium,
                     ),
                   ),

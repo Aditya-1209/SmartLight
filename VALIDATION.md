@@ -1,5 +1,14 @@
 # Direct-control validation record
 
+## 2026-10-01 — SmartLight 2.4.0 custom scenes and interface update
+
+- Added custom scene creation, current-state capture, per-slot inclusion/on/off/brightness/white/RGB, optional unchanged brightness/color, names and icons. Scenes can be edited, duplicated and deleted with Undo. Built-in scenes can be duplicated. Saving only updates preferences; lighting commands run only on activation.
+- Added a custom-scene gallery and home-screen quick access. Updated light/dark colors, card spacing, status styling, room controls, color labels and mobile header sizing across the shared Mac/Android/Windows UI.
+- Existing package/bundle identifiers, secure-storage keys, connection schema, pairing profiles and setup-transfer format are unchanged. Preferences gain an optional customScenes field. Scene/theme/device saves share a queue; failed or blocked scene saves do not overwrite previously loaded state. Scene creation/edit/delete never writes credentials. Scenes are saved per device and are not included in connection-only setup codes.
+- Analyzer and formatting checks passed. All **99 tests passed**, including old-preference migration, restart persistence, concurrent saves, failed/locked-storage preservation, selected-light-only activation, active-color capture, corrupt scene validation and create → capture → activate → edit → duplicate → delete → undo at 390×844, 1280×800 and 1920×1080. Physical light commands were not sent for UI testing.
+- Before the Mac update, its existing dashboard showed saved cards for both Wipro tubes and the Tapo strip. The user previously confirmed Wipro control on Android; no additional physical firmware-wide compatibility claim is made.
+- macOS release **2.4.0 / build 9** built successfully (47.3 MB) and passed deep/strict signature verification. The previous local app bundle was retained before replacement. Android installation is deferred at the user's request; Windows/Android/macOS CI results are attached to the commit's Actions run.
+
 ## 2026-09-30 — SmartLight 2.3.1 Tuya protocol detection
 
 - The personal 2.3.0 APK was installed on the Pixel 8. The user subsequently reported both battens paired, and the SDK screen listed two existing devices, but returned no usable LAN address. Two candidate addresses accepted TCP connections on port 6668 from the Pixel; discovery did not confirm their device-ID mapping. The user reported both candidates timing out with protocol 3.3. This establishes neither a wrong key nor a working local-control connection.
