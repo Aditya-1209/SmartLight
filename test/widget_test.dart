@@ -54,6 +54,8 @@ void main() {
       expect(find.text('One room. All your lights.'), findsOneWidget);
       await tester.tap(find.text('Add your lights'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Connected lights'));
+      await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('strip-host')), findsOneWidget);
       expect(find.byKey(const ValueKey('strip-password')), findsOneWidget);
       await tester.ensureVisible(find.text('Test connection'));
@@ -63,7 +65,10 @@ void main() {
         find.textContaining('Enter the light’s local IPv4'),
         findsOneWidget,
       );
-      await tester.tap(find.text('Diagnostics').first);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Connection diagnostics'));
+      await tester.tap(find.text('Connection diagnostics').first);
       await tester.pumpAndSettle();
       expect(
         find.text('Refreshes every 5 seconds while the app is open.'),

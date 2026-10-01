@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 2.4.0+9
+version: 2.5.0+10
 
 environment:
   sdk: ^3.13.4
@@ -40,6 +40,7 @@ dependencies:
   pointycastle: ^4.0.0
   flutter_secure_storage: ^11.2.0
   shared_preferences: ^2.5.5
+  flutter_svg: ^2.3.0
 
 dev_dependencies:
   flutter_test:
@@ -66,6 +67,18 @@ flutter:
   uses-material-design: true
   assets:
     - THIRD_PARTY_NOTICES.md
+    - assets/design/
+    - assets/fonts/OFL.txt
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.otf
+        - asset: assets/fonts/Inter-Medium.otf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.otf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.otf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:

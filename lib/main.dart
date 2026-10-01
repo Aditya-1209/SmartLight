@@ -13,6 +13,11 @@ Future<void> main() async {
       'SmartLight local protocols',
     ], await rootBundle.loadString('THIRD_PARTY_NOTICES.md'));
   });
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks([
+      'Inter',
+    ], await rootBundle.loadString('assets/fonts/OFL.txt'));
+  });
   final container = ProviderContainer();
   final initialization = container
       .read(appControllerProvider.notifier)

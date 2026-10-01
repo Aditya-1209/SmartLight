@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../models/light_command.dart';
 import '../models/scene.dart';
-import 'color_picker.dart';
+import '../app/theme.dart';
+import 'design_assets.dart';
 
 IconData sceneIcon(String id) => switch (id) {
   'study' => Icons.wb_sunny_outlined,
@@ -23,12 +24,12 @@ String sceneStyleLabel(String id) => switch (id) {
 };
 
 Color sceneAccent(String id) => switch (id) {
-  'study' => const Color(0xffd39a4a),
-  'movie' => const Color(0xff9b86dd),
-  'chill' => const Color(0xff6eb89b),
-  'sleep' => const Color(0xff7a9fd8),
+  'study' => LightPalette.blue,
+  'movie' => LightPalette.purple,
+  'chill' => LightPalette.mint,
+  'sleep' => LightPalette.blue,
   'music' => const Color(0xffd989aa),
-  _ => const Color(0xff60b9bf),
+  _ => LightPalette.warm,
 };
 
 String sceneLightSummary(LightCommand command) {
@@ -48,6 +49,14 @@ String sceneLightSummary(LightCommand command) {
   return parts.isEmpty ? 'On' : parts.join(' · ');
 }
 
+String sceneGlyph(String style) => switch (style) {
+  'study' => 'book',
+  'movie' => 'play',
+  'chill' => 'scenes',
+  'sleep' => 'moon',
+  _ => 'sun',
+};
+
 class SceneCard extends StatelessWidget {
   const SceneCard({
     required this.scene,
@@ -60,131 +69,121 @@ class SceneCard extends StatelessWidget {
   final VoidCallback? onTap;
   final bool expanded;
   final Widget? menu;
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context), accent = sceneAccent(scene.style);
+    final theme = Theme.of(context);
+    final accent = sceneAccent(scene.style);
+    final colours = switch (scene.style) {
+      'study' => const [Color(0xff293a3c), Color(0xff172327)],
+      'movie' => const [Color(0xff3c304c), Color(0xff221f30)],
+      'chill' => const [Color(0xff23423b), Color(0xff172721)],
+      'sleep' => const [Color(0xff26304a), Color(0xff171e2c)],
+      _ => const [Color(0xff403125), Color(0xff211e1a)],
+    };
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         key: ValueKey('scene-${scene.id}'),
         onTap: onTap,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                accent.withValues(alpha: .13),
-                accent.withValues(alpha: .015),
-              ],
-            ),
-          ),
-          child: Padding(
-            padding: EdgeInsets.all(expanded ? 24 : 18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(11),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: .15),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        sceneIcon(scene.style),
-                        size: 23,
-                        color: theme.brightness == Brightness.dark
-                            ? accent
-                            : Color.lerp(accent, Colors.black, .35),
-                      ),
-                    ),
-                    const Spacer(),
-                    if (menu != null)
-                      menu!
-                    else
-                      Icon(
-                        Icons.north_east,
-                        size: 18,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  scene.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: 88,
+              width: double.infinity,
+              child: ClipRect(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: colours),
                   ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  expanded && scene.description.isNotEmpty
-                      ? scene.description
-                      : '${scene.commands.length} ${scene.commands.length == 1 ? 'light' : 'lights'}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall,
-                ),
-                if (expanded) ...[
-                  const SizedBox(height: 20),
-                  for (final entry in scene.commands.entries)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 9),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.circle,
-                            size: 8,
-                            color: entry.value.service == 'turn_off'
-                                ? theme.colorScheme.outline
-                                : entry.value.rgb != null
-                                ? materialColor(entry.value.rgb!)
-                                : accent,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              '${switch (entry.key) {
-                                'tube1' => 'Tube 1',
-                                'tube2' => 'Tube 2',
-                                _ => 'Strip',
-                              }}  ·  ${sceneLightSummary(entry.value)}',
-                              style: theme.textTheme.bodySmall,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  Row(
+                  child: Stack(
                     children: [
-                      Icon(
-                        Icons.play_arrow_rounded,
-                        size: 18,
-                        color: onTap == null
-                            ? theme.disabledColor
-                            : theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Activate scene',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: onTap == null
-                              ? theme.disabledColor
-                              : theme.colorScheme.primary,
+                      Positioned(
+                        right: -42,
+                        top: 28,
+                        child: Container(
+                          width: 112,
+                          height: 112,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: accent.withValues(alpha: .09),
+                          ),
                         ),
                       ),
+                      Positioned(
+                        right: -28,
+                        top: 42,
+                        child: Container(
+                          width: 84,
+                          height: 84,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: accent.withValues(alpha: .09),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 16,
+                        top: 18,
+                        child: DesignIcon(
+                          sceneGlyph(scene.style),
+                          size: 28,
+                          color: accent,
+                        ),
+                      ),
+                      Positioned(
+                        left: 54,
+                        top: 62,
+                        child: Container(
+                          width: 88,
+                          height: 2,
+                          color: accent.withValues(alpha: .65),
+                        ),
+                      ),
+                      if (menu != null)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: IconTheme(
+                            data: const IconThemeData(
+                              color: LightPalette.muted,
+                            ),
+                            child: menu!,
+                          ),
+                        ),
                     ],
                   ),
-                ],
-              ],
+                ),
+              ),
             ),
-          ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    scene.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${scene.commands.length} lights · ${scene.isCustom ? 'Your scene' : switch (scene.style) {
+                            'study' => 'Clear & bright',
+                            'movie' => 'Soft & cinematic',
+                            'chill' => 'Unwind',
+                            'sleep' => 'Wind down',
+                            _ => 'Your mood',
+                          }}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

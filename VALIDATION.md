@@ -1,5 +1,14 @@
 # Direct-control validation record
 
+## 2026-10-01 — SmartLight 2.5.0 Figma interface
+
+- Implemented the shared Android, macOS and Windows interface from the SmartLight Figma construction records and reviewed screens. The Figma connector remained rate-limited on Starter; no upgrade was selected.
+- Added the original room/icon SVG assets and locally bundled Inter fonts; updated the theme, compact light cards with live brightness sliders, room overview, scene filters/gallery/summary, adaptive scene editor, saved confirmation, light controls and Settings navigation.
+- Kept all app identifiers, secure-storage keys, preference formats, protocol/pairing code and connection transfer unchanged. Existing custom scenes, device mappings and credentials remain compatible. Saving a scene does not apply it. Saved confirmation provides a separate Apply action.
+- Static analysis passed. All **103 tests passed**, including setup, encrypted transfers, persistence/credential-write guards, scene workflows and mobile/desktop UI checks.
+- Rendered and reviewed the actual Flutter UI at 360 × 800, 412 × 915 and 1440 × 1000, using simulated lights only. Preview captures are in the ignored build/ui-review directory.
+- Platform packaging results are recorded below once complete. Android installation remains deferred; the personal pairing APK stays local.
+
 ## 2026-10-01 — SmartLight 2.4.0 custom scenes and interface update
 
 - Added custom scene creation, current-state capture, per-slot inclusion/on/off/brightness/white/RGB, optional unchanged brightness/color, names and icons. Scenes can be edited, duplicated and deleted with Undo. Built-in scenes can be duplicated. Saving only updates preferences; lighting commands run only on activation.

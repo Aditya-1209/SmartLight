@@ -91,3 +91,11 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Inter typography
+
+Inter 4.1 by Rasmus Andersson, bundled under the SIL Open Font License 1.1. Source: https://github.com/rsms/inter/releases/tag/v4.1. Full license: assets/fonts/OFL.txt.
+
+## SmartLight design assets
+
+The SVG room illustration and icons in assets/design are the original assets used in the SmartLight Figma construction records under design/figma. Scene artwork is rendered with native Flutter shapes.

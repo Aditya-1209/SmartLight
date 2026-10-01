@@ -12,11 +12,113 @@ import '../../widgets/brightness_slider.dart';
 import '../../widgets/color_picker.dart';
 import '../../widgets/common.dart';
 import '../../widgets/scene_card.dart';
+import '../../widgets/scene_summary.dart';
+import '../../widgets/design_assets.dart';
+
+Future<void> openSceneEditor(
+  BuildContext context, {
+  LightScene? scene,
+  bool duplicate = false,
+  String? initialSlotId,
+}) async {
+  final rootContext = context;
+  final saved = await Navigator.of(context).push<LightScene>(
+    MaterialPageRoute(
+      builder: (_) => SceneEditorScreen(
+        scene: scene,
+        duplicate: duplicate,
+        initialSlotId: initialSlotId,
+      ),
+    ),
+  );
+  if (saved == null || !context.mounted) return;
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    constraints: const BoxConstraints(maxWidth: 520),
+    builder: (sheetContext) => Consumer(
+      builder: (context, ref, _) {
+        final state = ref.watch(appControllerProvider);
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(context).height * .84,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '“${saved.name}” saved',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Your new favourite.',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Ready whenever your room needs a different feeling.',
+                ),
+                const SizedBox(height: 20),
+                SceneSummary(
+                  scene: saved,
+                  slots: state.slots,
+                  onApply: state.connected && state.busy.isEmpty
+                      ? () async {
+                          final report = await ref
+                              .read(appControllerProvider.notifier)
+                              .applyScene(saved);
+                          if (!context.mounted) return;
+                          if (!report.hasFailures) {
+                            Navigator.of(sheetContext).pop();
+                          }
+                          if (!rootContext.mounted) return;
+                          ScaffoldMessenger.of(rootContext).showSnackBar(
+                            SnackBar(content: Text(report.message)),
+                          );
+                        }
+                      : null,
+                  onEdit: () {
+                    Navigator.of(sheetContext).pop();
+                    openSceneEditor(rootContext, scene: saved);
+                  },
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  key: const ValueKey('saved-scene-done'),
+                  onPressed: () => Navigator.of(sheetContext).pop(),
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ),
+  );
+}
 
 class SceneEditorScreen extends ConsumerStatefulWidget {
-  const SceneEditorScreen({this.scene, this.duplicate = false, super.key});
+  const SceneEditorScreen({
+    this.scene,
+    this.duplicate = false,
+    this.initialSlotId,
+    super.key,
+  });
   final LightScene? scene;
   final bool duplicate;
+  final String? initialSlotId;
   @override
   ConsumerState<SceneEditorScreen> createState() => _SceneEditorScreenState();
 }
@@ -28,12 +130,15 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
   late String _appearance;
   final _drafts = <String, _LightDraft>{};
   bool _saving = false;
+  String _expandedId = 'tube1';
   String? _error;
 
   @override
   void initState() {
     super.initState();
     final scene = widget.scene;
+    _expandedId =
+        scene?.commands.keys.firstOrNull ?? widget.initialSlotId ?? 'tube1';
     _id = scene != null && !widget.duplicate && scene.isCustom
         ? scene.id
         : 'custom-${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
@@ -56,7 +161,9 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
               : const LightCommand(brightnessPercent: 60, kelvin: 4000));
       _drafts[slot.id] = _LightDraft(
         command,
-        included: scene == null || scene.commands.containsKey(slot.id),
+        included: scene == null
+            ? widget.initialSlotId == null || widget.initialSlotId == slot.id
+            : scene.commands.containsKey(slot.id),
       );
     }
   }
@@ -127,14 +234,7 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
       if (!mounted) return;
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).clearSnackBars();
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '“${_name.text.trim()}” saved. Tap the scene to use it.',
-          ),
-        ),
-      );
+      Navigator.of(context).pop(_preview);
     } catch (error) {
       if (mounted) setState(() => _error = userMessage(error));
     } finally {
@@ -142,155 +242,194 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
     }
   }
 
+  LightScene get _preview =>
+      LightScene(_id, _name.text.trim(), _description.text.trim(), {
+        for (final e in _drafts.entries)
+          if (e.value.included) e.key: e.value.command,
+      }, appearance: _appearance);
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(appControllerProvider);
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context), scheme = theme.colorScheme;
     final editing = widget.scene?.isCustom == true && !widget.duplicate;
+    final wide = MediaQuery.sizeOf(context).width >= 1100;
+    final form = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          key: const ValueKey('scene-name'),
+          controller: _name,
+          enabled: !_saving,
+          textCapitalization: TextCapitalization.sentences,
+          maxLength: 60,
+          onChanged: (_) => setState(() {}),
+          decoration: const InputDecoration(
+            labelText: 'Scene name',
+            hintText: 'Golden hour',
+          ),
+          validator: (value) => value == null || value.trim().isEmpty
+              ? 'Give your scene a name.'
+              : null,
+        ),
+        const SizedBox(height: 12),
+        ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          shape: const Border(),
+          collapsedShape: const Border(),
+          initiallyExpanded: _description.text.isNotEmpty,
+          title: Text(
+            'Description (optional)',
+            style: theme.textTheme.bodySmall,
+          ),
+          children: [
+            TextFormField(
+              key: const ValueKey('scene-description'),
+              controller: _description,
+              enabled: !_saving,
+              maxLength: 160,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: 'Description (optional)',
+                hintText: 'A warmer room. A slower evening.',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text('Icon', style: theme.textTheme.labelLarge),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final style in LightScene.appearances)
+              IconButton.filledTonal(
+                tooltip: sceneStyleLabel(style),
+                isSelected: _appearance == style,
+                style: IconButton.styleFrom(
+                  foregroundColor: _appearance == style
+                      ? sceneAccent(style)
+                      : scheme.onSurfaceVariant,
+                  backgroundColor: _appearance == style
+                      ? scheme.surfaceContainerHighest
+                      : Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: _saving
+                    ? null
+                    : () => setState(() => _appearance = style),
+                icon: DesignIcon(
+                  sceneGlyph(style),
+                  color: _appearance == style
+                      ? sceneAccent(style)
+                      : scheme.onSurfaceVariant,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            key: const ValueKey('capture-scene'),
+            onPressed:
+                !_saving &&
+                    state.slots.any((s) => state.lightFor(s)?.available == true)
+                ? _capture
+                : null,
+            icon: const DesignIcon('scenes', size: 20),
+            label: const Text('Use current lights'),
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Or choose a setting for each light. Uncheck a light to leave it unchanged.',
+        ),
+        const SizedBox(height: 20),
+        for (final slot in state.slots) ...[
+          _lightCard(slot.id, slot.name, state.lightFor(slot)),
+          const SizedBox(height: 16),
+        ],
+        if (_error != null)
+          Text(_error!, style: TextStyle(color: scheme.error)),
+        const SizedBox(height: 12),
+        const Text('Saving a scene won’t change your lights.'),
+      ],
+    );
     return PopScope(
       canPop: !_saving,
       child: Scaffold(
-        appBar: AppBar(title: Text(editing ? 'Edit scene' : 'Create a scene')),
-        body: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
-            child: Form(
-              key: _form,
-              child: ListView(
-                padding: const EdgeInsets.all(24),
-                children: [
-                  const PageHeading(
-                    'Make it your moment',
-                    'Choose the light for your routine. Saving won’t change your room.',
-                  ),
-                  SectionCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TextFormField(
-                          key: const ValueKey('scene-name'),
-                          controller: _name,
-                          enabled: !_saving,
-                          textCapitalization: TextCapitalization.sentences,
-                          maxLength: 60,
-                          decoration: const InputDecoration(
-                            labelText: 'Scene name',
-                            hintText: 'Evening unwind',
-                          ),
-                          validator: (value) =>
-                              value == null || value.trim().isEmpty
-                              ? 'Give your scene a name.'
-                              : null,
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          key: const ValueKey('scene-description'),
-                          controller: _description,
-                          enabled: !_saving,
-                          maxLength: 160,
-                          decoration: const InputDecoration(
-                            labelText: 'Description (optional)',
-                            hintText: 'A little warmth after a long day',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Choose an icon',
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: [
-                            for (final style in LightScene.appearances)
-                              Tooltip(
-                                message: sceneStyleLabel(style),
-                                child: IconButton.filledTonal(
-                                  isSelected: _appearance == style,
-                                  tooltip: sceneStyleLabel(style),
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: _appearance == style
-                                        ? scheme.primaryContainer
-                                        : scheme.surfaceContainerHighest,
-                                    side: _appearance == style
-                                        ? BorderSide(
-                                            color: scheme.primary,
-                                            width: 2,
-                                          )
-                                        : BorderSide.none,
-                                  ),
-                                  onPressed: _saving
-                                      ? null
-                                      : () =>
-                                            setState(() => _appearance = style),
-                                  icon: Icon(sceneIcon(style)),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  Text(
-                    'Build your scene',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Only selected lights change. Leave a light unchecked to keep it as it is.',
-                  ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      key: const ValueKey('capture-scene'),
-                      onPressed:
-                          !_saving &&
-                              state.slots.any(
-                                (s) => state.lightFor(s)?.available == true,
-                              )
-                          ? _capture
-                          : null,
-                      icon: const Icon(Icons.camera_outlined),
-                      label: const Text('Use current light settings'),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  for (final slot in state.slots) ...[
-                    _lightCard(slot.id, slot.name, state.lightFor(slot)),
-                    const SizedBox(height: 16),
-                  ],
-                  if (_error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Text(
-                        _error!,
-                        style: TextStyle(color: scheme.error),
-                      ),
-                    ),
-                  FilledButton.icon(
-                    key: const ValueKey('save-scene'),
-                    onPressed: _saving ? null : _save,
-                    icon: _saving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.check),
-                    label: Text(_saving ? 'Saving…' : 'Save scene'),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Saved on this device. Your light connections and pairing details stay the same.',
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
+        appBar: AppBar(title: Text(editing ? 'Edit scene' : 'New scene')),
+        bottomNavigationBar: SafeArea(
+          child: Container(
+            color: scheme.surfaceContainerLow,
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton(
+                  onPressed: _saving ? null : () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 12),
+                FilledButton.icon(
+                  key: const ValueKey('save-scene'),
+                  onPressed: _saving ? null : _save,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.check),
+                  label: Text(_saving ? 'Saving…' : 'Save scene'),
+                ),
+              ],
             ),
+          ),
+        ),
+        body: Form(
+          key: _form,
+          child: ListView(
+            padding: EdgeInsets.all(wide ? 40 : 20),
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1136),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (wide)
+                        const PageHeading(
+                          'Make it your own.',
+                          'A custom scene, down to the last light.',
+                        ),
+                      if (wide)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 6, child: SectionCard(child: form)),
+                            const SizedBox(width: 32),
+                            Expanded(
+                              flex: 4,
+                              child: SceneSummary(
+                                scene: _preview,
+                                slots: state.slots,
+                                draft: true,
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        form,
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -317,38 +456,68 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
     }
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            CheckboxListTile(
-              key: ValueKey('include-$id'),
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              value: draft.included,
-              onChanged: _saving
-                  ? null
-                  : (value) => setState(() => draft.included = value!),
-              title: Text(name, style: Theme.of(context).textTheme.titleMedium),
-              subtitle: Text(
-                draft.included ? 'Included in this scene' : 'Leave unchanged',
-              ),
+            Row(
+              children: [
+                Checkbox(
+                  key: ValueKey('include-$id'),
+                  value: draft.included,
+                  onChanged: _saving
+                      ? null
+                      : (value) => setState(() {
+                          draft.included = value!;
+                          if (value) _expandedId = id;
+                        }),
+                ),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => setState(
+                      () => _expandedId = _expandedId == id ? '' : id,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          Text(
+                            draft.included
+                                ? sceneLightSummary(draft.command)
+                                : 'Leave unchanged',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (draft.included)
+                  Switch(
+                    key: ValueKey('scene-power-$id'),
+                    value: draft.on,
+                    onChanged: _saving
+                        ? null
+                        : (value) => setState(() => draft.on = value),
+                  ),
+              ],
             ),
             if (draft.included) ...[
-              SwitchListTile(
-                key: ValueKey('scene-power-$id'),
-                contentPadding: EdgeInsets.zero,
-                title: Text(draft.on ? 'Turn on' : 'Turn off'),
-                value: draft.on,
-                onChanged: _saving
-                    ? null
-                    : (value) => setState(() => draft.on = value),
-              ),
-              if (draft.on) ...[
+              if (draft.on && _expandedId == id) ...[
                 if (supportsBrightness) ...[
                   const SizedBox(height: 8),
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Keep brightness unchanged'),
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    title: const Text(
+                      'Keep brightness unchanged',
+                      style: TextStyle(fontSize: 12),
+                    ),
                     value: draft.brightness == null,
                     onChanged: _saving
                         ? null
@@ -359,6 +528,7 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
                   if (draft.brightness != null)
                     ValueSlider(
                       label: 'Brightness',
+                      color: sceneAccent('sparkle'),
                       value: draft.brightness!,
                       min: 1,
                       onChanged: _saving

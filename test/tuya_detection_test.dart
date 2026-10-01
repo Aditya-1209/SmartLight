@@ -232,6 +232,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Add your lights'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Connected lights'));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const ValueKey('expand-tube1')));
     await tester.tap(find.byKey(const ValueKey('expand-tube1')));
     await tester.pumpAndSettle();

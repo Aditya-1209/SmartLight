@@ -9,6 +9,8 @@ import '../../providers/app_controller.dart';
 import '../../services/device_exception.dart';
 import '../../services/pairing/tuya_pairing.dart';
 import '../../widgets/common.dart';
+import '../../widgets/design_assets.dart';
+import '../diagnostics/diagnostics_screen.dart';
 import 'wipro_pairing_screen.dart';
 import 'mac_wipro_pairing_screen.dart';
 import 'setup_transfer_screen.dart';
@@ -19,97 +21,124 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(appControllerProvider);
     final controller = ref.read(appControllerProvider.notifier);
+    final theme = Theme.of(context);
+    Widget row(
+      String icon,
+      String title,
+      String subtitle,
+      VoidCallback onTap,
+    ) => Card(
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: DesignIcon(icon),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
+      ),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const PageHeading(
-          'Settings',
-          'Your lights. Your Wi-Fi. Ready when you are.',
+        const PageHeading('Settings', 'Make SmartLight feel like yours.'),
+        Text('YOUR SETUP', style: theme.textTheme.labelSmall),
+        const SizedBox(height: 12),
+        row(
+          'bulb',
+          'Connected lights',
+          '${state.config?.devices.length ?? 0} saved connections',
+          () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const ConnectedLightsScreen()),
+          ),
         ),
+        const SizedBox(height: 12),
+        row(
+          'transfer',
+          'Transfer setup',
+          'Move light connections to another device',
+          () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SetupTransferScreen()),
+          ),
+        ),
+        const SizedBox(height: 28),
+        Text('PREFERENCES', style: theme.textTheme.labelSmall),
+        const SizedBox(height: 12),
+        SectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const DesignIcon('moon'),
+                  const SizedBox(width: 12),
+                  Text('Appearance', style: theme.textTheme.titleMedium),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final mode in ThemeMode.values)
+                    ChoiceChip(
+                      label: Text(switch (mode) {
+                        ThemeMode.system => 'System',
+                        ThemeMode.light => 'Light',
+                        ThemeMode.dark => 'Dark',
+                      }),
+                      selected: state.settings.theme == mode,
+                      onSelected: (_) =>
+                          runSetting(context, controller.setTheme(mode)),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        row(
+          'wifi',
+          'Connection diagnostics',
+          'Check a light that isn’t responding',
+          () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => Scaffold(
+                appBar: AppBar(title: const Text('Connection diagnostics')),
+                body: const SingleChildScrollView(
+                  padding: EdgeInsets.all(24),
+                  child: DiagnosticsScreen(),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
         const SectionCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Connect directly',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
-              ),
+              DesignIcon('shield', size: 26),
               SizedBox(height: 12),
               Text(
-                'Keep the lights powered and join the same Wi-Fi. Add one light at a time; the rest can wait. Only the device running SmartLight needs to be on.',
+                'Your room, your control.',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
               ),
-              SizedBox(height: 10),
+              SizedBox(height: 8),
               Text(
-                'Find each light’s IP address in its original app or your router’s connected devices. Reserve that address in your router so it stays the same.',
+                'Control your lights while you’re on the same Wi-Fi. Your connections are stored securely on this device.',
               ),
+              SizedBox(height: 8),
+              Text('Custom scenes are saved on this device.'),
             ],
           ),
         ),
-        const SizedBox(height: 24),
-        for (final slot in DeviceSlot.defaults) ...[
-          DeviceSetupCard(
-            key: ValueKey('setup-${slot.id}'),
-            slot: slot,
-            saved: state.config?.devices
-                .where((d) => d.slotId == slot.id)
-                .firstOrNull,
-          ),
-          const SizedBox(height: 16),
-        ],
-        SectionCard(
-          child: ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.devices),
-            title: const Text('Use lights on another device'),
-            subtitle: const Text(
-              'Pair once, then transfer setup to Mac, Android or Windows.',
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SetupTransferScreen()),
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        SectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Appearance', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 10,
-                children: ThemeMode.values
-                    .map(
-                      (mode) => ChoiceChip(
-                        label: Text(switch (mode) {
-                          ThemeMode.system => 'System',
-                          ThemeMode.light => 'Light',
-                          ThemeMode.dark => 'Dark',
-                        }),
-                        selected: state.settings.theme == mode,
-                        onSelected: (_) =>
-                            runSetting(context, controller.setTheme(mode)),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-        const AboutListTile(
-          applicationName: 'SmartLight',
-          applicationVersion: '2.4.0',
-          icon: Icon(Icons.info_outline),
-        ),
-        SectionCard(
+        const SizedBox(height: 20),
+        Card(
           child: SwitchListTile(
             key: const ValueKey('demo-toggle'),
-            contentPadding: EdgeInsets.zero,
             title: const Text('Demo mode'),
             subtitle: const Text(
-              'Explore three simulated lights. Your saved device connections are kept.',
+              'Explore simulated lights. Your saved connections are kept.',
             ),
             value: state.settings.demo,
             onChanged: state.busy.isNotEmpty
@@ -117,7 +146,51 @@ class SettingsScreen extends ConsumerWidget {
                 : (v) => runSetting(context, controller.setDemo(v)),
           ),
         ),
+        const SizedBox(height: 16),
+        const AboutListTile(
+          applicationName: 'SmartLight',
+          applicationVersion: '2.5.0',
+          icon: Icon(Icons.info_outline),
+        ),
       ],
+    );
+  }
+}
+
+class ConnectedLightsScreen extends ConsumerWidget {
+  const ConnectedLightsScreen({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(appControllerProvider);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Connected lights')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const PageHeading(
+                  'Your lights',
+                  'Keep your lights powered and join the same Wi-Fi.',
+                ),
+                for (final slot in DeviceSlot.defaults) ...[
+                  DeviceSetupCard(
+                    key: ValueKey('setup-${slot.id}'),
+                    slot: slot,
+                    saved: state.config?.devices
+                        .where((d) => d.slotId == slot.id)
+                        .firstOrNull,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

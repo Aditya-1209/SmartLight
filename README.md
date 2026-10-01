@@ -17,6 +17,7 @@ The device running SmartLight is the controller. Connections and five-second pol
 
 - Responsive Material 3 dashboard, dark/light/system themes and per-light controls.
 - Room power, brightness, RGB presets/custom colors and Study/Movie/Chill/Sleep scenes.
+- Figma-based adaptive room overview, live light-card dimmers, scene previews and a three-tab interface for Android, Mac and Windows. Diagnostics are available in Settings.
 - Custom scenes with names, icons, per-light power/brightness/white/color, current-state capture, editing, duplication and undoable deletion. Saving does not send light commands.
 - Add lights one at a time; incomplete rooms remain usable.
 - Detect the Tuya LAN protocol during setup using read-only checks for 3.3, 3.4 and 3.5.

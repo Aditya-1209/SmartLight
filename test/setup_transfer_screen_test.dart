@@ -64,8 +64,8 @@ void main() {
           ),
         ),
       );
-      await tester.ensureVisible(find.text('Use lights on another device'));
-      await tester.tap(find.text('Use lights on another device'));
+      await tester.ensureVisible(find.text('Transfer setup'));
+      await tester.tap(find.text('Transfer setup'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Receive setup'));
       await tester.pumpAndSettle();
@@ -92,6 +92,9 @@ void main() {
       });
       expect(find.textContaining('Connections saved securely'), findsOneWidget);
       await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Connected lights'));
+      await tester.tap(find.text('Connected lights'));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const ValueKey('expand-tube1')));
       await tester.tap(find.byKey(const ValueKey('expand-tube1')));

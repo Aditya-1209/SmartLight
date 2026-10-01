@@ -61,6 +61,8 @@ void main() {
     await show(tester, container);
     await tester.tap(find.text('Add your lights'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Connected lights'));
+    await tester.pumpAndSettle();
     for (final entry in {
       'strip-host': '192.168.1.50',
       'strip-email': 'test@example.com',

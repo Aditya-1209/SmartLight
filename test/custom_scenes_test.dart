@@ -368,6 +368,9 @@ void main() {
       await reveal(tester, find.byKey(const ValueKey('save-scene')));
       await tester.tap(find.byKey(const ValueKey('save-scene')));
       await tester.pumpAndSettle();
+      await reveal(tester, find.byKey(const ValueKey('saved-scene-done')));
+      await tester.tap(find.byKey(const ValueKey('saved-scene-done')));
+      await tester.pumpAndSettle();
       var scene = container
           .read(appControllerProvider)
           .settings
@@ -401,7 +404,9 @@ void main() {
       );
       await tester.tap(find.byTooltip('Options for Evening reading'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Edit scene'));
+      await tester.tap(
+        find.widgetWithText(PopupMenuItem<String>, 'Edit scene'),
+      );
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('scene-name')),
@@ -409,6 +414,9 @@ void main() {
       );
       await reveal(tester, find.byKey(const ValueKey('save-scene')));
       await tester.tap(find.byKey(const ValueKey('save-scene')));
+      await tester.pumpAndSettle();
+      await reveal(tester, find.byKey(const ValueKey('saved-scene-done')));
+      await tester.tap(find.byKey(const ValueKey('saved-scene-done')));
       await tester.pumpAndSettle();
       scene = container
           .read(appControllerProvider)
@@ -423,6 +431,9 @@ void main() {
       await tester.pumpAndSettle();
       await reveal(tester, find.byKey(const ValueKey('save-scene')));
       await tester.tap(find.byKey(const ValueKey('save-scene')));
+      await tester.pumpAndSettle();
+      await reveal(tester, find.byKey(const ValueKey('saved-scene-done')));
+      await tester.tap(find.byKey(const ValueKey('saved-scene-done')));
       await tester.pumpAndSettle();
       expect(
         container.read(appControllerProvider).settings.customScenes.length,

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_controller.dart';
 import '../screens/dashboard/dashboard_screen.dart';
-import '../screens/diagnostics/diagnostics_screen.dart';
+import '../widgets/design_assets.dart';
 import '../screens/scenes/scenes_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../services/connection_status.dart';
@@ -32,13 +32,8 @@ class _AppShellState extends ConsumerState<AppShell>
     with WidgetsBindingObserver {
   int _page = 0;
   final _scroll = ScrollController();
-  static const _labels = ['My Room', 'Scenes', 'Diagnostics', 'Settings'];
-  static const _icons = [
-    Icons.space_dashboard_outlined,
-    Icons.auto_awesome_outlined,
-    Icons.monitor_heart_outlined,
-    Icons.tune,
-  ];
+  static const _labels = ['My room', 'Scenes', 'Settings'];
+  static const _icons = ['room', 'scenes', 'settings'];
   @override
   void initState() {
     super.initState();
@@ -89,43 +84,27 @@ class _AppShellState extends ConsumerState<AppShell>
     final wide = MediaQuery.sizeOf(context).width >= 850;
     final screen = switch (_page) {
       0 => DashboardScreen(
-        onSetup: () => _select(3),
+        onSetup: () => _select(2),
         onScenes: () => _select(1),
       ),
       1 => const ScenesScreen(),
-      2 => const DiagnosticsScreen(),
       _ => const SettingsScreen(),
     };
     return Scaffold(
-      appBar: wide
-          ? null
-          : AppBar(
-              title: const Row(
-                children: [
-                  Icon(Icons.lightbulb_outline),
-                  SizedBox(width: 10),
-                  Flexible(
-                    child: Text('SmartLight', overflow: TextOverflow.ellipsis),
-                  ),
-                ],
-              ),
-              actions: [
-                if (state.settings.demo)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 16),
-                    child: Chip(label: Text('Demo')),
-                  ),
-              ],
-            ),
       bottomNavigationBar: wide
           ? null
           : NavigationBar(
               selectedIndex: _page,
               onDestinationSelected: _select,
               destinations: List.generate(
-                4,
+                3,
                 (i) => NavigationDestination(
-                  icon: Icon(_icons[i]),
+                  icon: DesignIcon(
+                    _icons[i],
+                    color: _page == i
+                        ? scheme.primary
+                        : scheme.onSurfaceVariant,
+                  ),
                   label: _labels[i],
                 ),
               ),
@@ -135,7 +114,7 @@ class _AppShellState extends ConsumerState<AppShell>
           children: [
             if (wide)
               Container(
-                width: 216,
+                width: 224,
                 decoration: BoxDecoration(
                   color: scheme.surfaceContainerLow,
                   border: Border(
@@ -150,7 +129,7 @@ class _AppShellState extends ConsumerState<AppShell>
                       padding: const EdgeInsets.fromLTRB(24, 34, 24, 28),
                       child: Row(
                         children: [
-                          Icon(Icons.lightbulb_outline, color: scheme.primary),
+                          DesignIcon('bulb', color: scheme.primary),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
@@ -164,19 +143,42 @@ class _AppShellState extends ConsumerState<AppShell>
                       ),
                     ),
                     Expanded(
-                      child: NavigationRail(
-                        extended: true,
-                        minExtendedWidth: 215,
-                        backgroundColor: Colors.transparent,
-                        selectedIndex: _page,
-                        onDestinationSelected: _select,
-                        destinations: List.generate(
-                          4,
-                          (i) => NavigationRailDestination(
-                            icon: Icon(_icons[i]),
-                            label: Text(_labels[i]),
-                          ),
-                        ),
+                      child: ListView(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        children: [
+                          for (var i = 0; i < _labels.length; i++)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Material(
+                                color: _page == i
+                                    ? scheme.surfaceContainerHighest
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                                child: ListTile(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  selected: _page == i,
+                                  selectedColor: scheme.primary,
+                                  leading: DesignIcon(
+                                    _icons[i],
+                                    size: 20,
+                                    color: _page == i
+                                        ? scheme.primary
+                                        : scheme.onSurfaceVariant,
+                                  ),
+                                  title: Text(
+                                    _labels[i],
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  onTap: () => _select(i),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     Padding(
@@ -195,7 +197,7 @@ class _AppShellState extends ConsumerState<AppShell>
                               state.settings.demo
                                   ? 'Demo workspace'
                                   : state.connected
-                                  ? 'Direct Wi-Fi'
+                                  ? 'Local connection'
                                   : 'Not connected',
                               style: Theme.of(context).textTheme.labelMedium,
                             ),
@@ -257,7 +259,12 @@ class _AppShellState extends ConsumerState<AppShell>
                       controller: _scroll,
                       child: SingleChildScrollView(
                         controller: _scroll,
-                        padding: EdgeInsets.all(wide ? 40 : 20),
+                        padding: EdgeInsets.fromLTRB(
+                          wide ? 40 : 20,
+                          wide ? 40 : 24,
+                          wide ? 40 : 20,
+                          28,
+                        ),
                         child: Align(
                           alignment: Alignment.topCenter,
                           child: ConstrainedBox(

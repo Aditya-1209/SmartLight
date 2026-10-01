@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../app/theme.dart';
 import '../models/device_slot.dart';
 import '../models/light_entity.dart';
+import 'brightness_slider.dart';
 import 'color_picker.dart';
-import 'common.dart';
+import 'design_assets.dart';
 
 class LightCard extends StatelessWidget {
   const LightCard({
@@ -12,6 +14,7 @@ class LightCard extends StatelessWidget {
     required this.busy,
     required this.onOpen,
     required this.onPower,
+    this.onBrightness,
     super.key,
   });
   final DeviceSlot slot;
@@ -19,133 +22,133 @@ class LightCard extends StatelessWidget {
   final bool busy;
   final VoidCallback onOpen;
   final VoidCallback? onPower;
+  final ValueChanged<double>? onBrightness;
+
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context), scheme = theme.colorScheme;
     final on = light?.isOn == true;
-    final accent =
-        on &&
-            light?.rgbColor != null &&
-            light?.rawAttributes['color_mode'] != 'color_temp'
-        ? materialColor(light!.rgbColor!)
-        : scheme.primary;
+    final available = light?.available == true;
+    final colour =
+        light?.rgbColor != null &&
+        light?.rawAttributes['color_mode'] != 'color_temp';
+    final accent = colour ? materialColor(light!.rgbColor!) : LightPalette.warm;
+    final temperature = light?.colorTempKelvin;
+    final description = light == null
+        ? 'Add this light in Settings'
+        : !available
+        ? 'Not reachable'
+        : !on
+        ? 'Off'
+        : colour
+        ? 'Colour lighting'
+        : temperature != null
+        ? '${temperature < 3500
+              ? 'Warm'
+              : temperature > 5000
+              ? 'Cool'
+              : 'Soft'} white · $temperature K'
+        : 'Light is on';
     return Card(
       key: ValueKey('device-${slot.id}'),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
-        child: Padding(
-          padding: const EdgeInsets.all(22),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: StatusBadge(
-                      light == null
-                          ? 'Not set up'
-                          : light!.available
-                          ? 'Online'
-                          : 'Unavailable',
-                      good: light?.available == true,
-                      neutral: light == null,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: onOpen,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: scheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: DesignIcon(
+                                slot.id == 'strip' ? 'strip' : 'tube',
+                                color: available && on
+                                    ? accent
+                                    : scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  slot.name,
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  description,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  IconButton.filledTonal(
-                    key: ValueKey('power-${slot.id}'),
-                    tooltip: '${on ? 'Turn off' : 'Turn on'} ${slot.name}',
-                    onPressed: busy ? null : onPower,
-                    icon: busy
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.power_settings_new),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                height: 64,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  gradient: LinearGradient(
-                    colors: [
-                      accent.withValues(alpha: on ? .18 : .04),
-                      accent.withValues(alpha: .02),
-                    ],
                   ),
                 ),
-                child: slot.id == 'strip'
-                    ? Icon(
-                        Icons.waves,
-                        color: on ? accent : scheme.outline,
-                        size: 48,
-                      )
-                    : Container(
-                        width: 130,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: on ? accent : scheme.outlineVariant,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: on
-                              ? [
-                                  BoxShadow(
-                                    color: accent.withValues(alpha: .28),
-                                    blurRadius: 20,
-                                    spreadRadius: 5,
-                                  ),
-                                ]
-                              : [],
-                        ),
-                      ),
-              ),
-              const SizedBox(height: 20),
-              Text(slot.name, style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 6),
-              Text(
-                light == null
-                    ? 'Add this light in Settings'
-                    : !light!.available
-                    ? 'Check power, Wi-Fi and Settings'
-                    : '${on ? 'On' : 'Off'}${light!.supportsBrightness ? ' · ${light!.brightnessPercent}%' : ''}',
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  if (light?.rgbColor != null &&
-                      light?.rawAttributes['color_mode'] != 'color_temp') ...[
-                    Icon(
-                      Icons.circle,
-                      color: materialColor(light!.rgbColor!),
-                      size: 12,
+                const SizedBox(width: 4),
+                if (busy)
+                  const SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Padding(
+                      padding: EdgeInsets.all(14),
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                    const SizedBox(width: 7),
-                  ],
-                  Expanded(
-                    child: Text(
-                      light?.colorTempKelvin != null &&
-                              light?.rawAttributes['color_mode'] == 'color_temp'
-                          ? '${light!.colorTempKelvin! < 3500
-                                ? 'Warm'
-                                : light!.colorTempKelvin! > 5000
-                                ? 'Cool'
-                                : 'Soft'} white · ${light!.colorTempKelvin} K'
-                          : light?.rgbColor != null
-                          ? 'Color lighting'
-                          : 'Light controls',
-                      style: Theme.of(context).textTheme.labelMedium,
+                  )
+                else
+                  Semantics(
+                    label: '${on ? 'Turn off' : 'Turn on'} ${slot.name}',
+                    child: Switch(
+                      key: ValueKey('power-${slot.id}'),
+                      value: on,
+                      onChanged: onPower == null ? null : (_) => onPower!(),
                     ),
                   ),
-                  const Icon(Icons.arrow_forward, size: 18),
-                ],
+              ],
+            ),
+            if (light?.supportsBrightness == true)
+              ValueSlider(
+                key: ValueKey('brightness-${slot.id}'),
+                compact: true,
+                label: '${slot.name} brightness',
+                value: light!.brightnessPercent.toDouble(),
+                color: accent,
+                onChanged: busy ? null : onBrightness,
+              )
+            else
+              SizedBox(
+                height: 40,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: onOpen,
+                    child: Text(light == null ? 'Set up light' : 'View light'),
+                  ),
+                ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );
