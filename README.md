@@ -13,12 +13,13 @@ SmartLight on phone / Mac / Windows
   └─ Wipro/Tuya batten 2: encrypted local TCP
 ```
 
-The device running SmartLight is the controller. Connections and five-second polling stop in the background and resume when reopened. Everyday light controls run locally. Mac includes a setup-only Tuya Cloud/EZ pairing flow, and an optional personal Android build includes Tuya’s mobile SDK; this setup flow needs internet and closes its SDK connection when you leave it. No always-on server is required.
+The device running SmartLight is the controller. Connections and five-second polling stop in the background and resume when reopened. Everyday light controls run locally. Timers are stored on compatible lights and continue with SmartLight closed. Mac includes a setup-only Tuya Cloud/EZ pairing flow, and an optional personal Android build includes Tuya’s mobile SDK; this setup flow needs internet and closes its SDK connection when you leave it. No always-on server is required.
 
 - Responsive Material 3 dashboard, dark/light/system themes and per-light controls.
 - Room power, brightness, RGB presets/custom colors and Study/Movie/Chill/Sleep scenes.
 - Figma-based adaptive room overview, live light-card dimmers, scene previews and a three-tab interface for Android, Mac and Windows. Diagnostics are available in Settings.
 - Custom scenes with names, icons, per-light power/brightness/white/color, current-state capture, editing, duplication and undoable deletion. Saving does not send light commands.
+- Built-in light timers: turn on/off after a delay or once at a chosen local clock time within the next 24 hours. Select one or more lights, confirm by reading back from each light, and view/cancel timers from another connected SmartLight device. No server, paid service or background app is used.
 - Add lights one at a time; incomplete rooms remain usable.
 - Detect the Tuya LAN protocol during setup using read-only checks for 3.3, 3.4 and 3.5.
 - Pair once, then transfer saved connections between Mac, Android and Windows using a password-protected setup code. Import lets you review the lights and keeps other saved connections.
@@ -37,6 +38,14 @@ The device running SmartLight is the controller. Connections and five-second pol
 
 Tapo TPAP-only firmware, AES login v2, Tuya 3.1/3.2, vendor effects, music synchronization and arbitrary datapoint profiles are not supported. A Wipro Next password alone will not connect a batten.
 
+### Timers
+
+Open **My room → Timers & schedules**, or the same button on a light’s page. Choose **Turn off** or **Turn on**, then a delay (1–1,440 minutes) or a clock time. Clock times run once, not daily. Timers are read from the lights when this page opens, every 30 seconds while visible, and after a change. Each light supports one active timer; cancel it before creating another. Failed reads are shown as unknown, not as “no timer.”
+
+Tapo uses its local countdown-rule API. Wipro/Tuya requires a modern lighting profile and a valid reported DP26 countdown; unsupported firmware is rejected without guessing a datapoint or falling back to an app timer. Wipro countdowns reverse the current power state: turn the tube on before scheduling off, or off before scheduling on. A subsequent power change cancels the Wipro countdown. Keep wall power supplied; timers may be lost if a light loses power. Other vendor schedules can still affect a light. Device read-back confirms the timer is armed, not that a future physical action has already occurred.
+
+Demo timers are simulated only while the demo is open. Real timers do not change the credentials or scenes stored on Mac, Android or Windows.
+
 ## Run
 
 Use Flutter **3.47.5 / Dart 3.13.4**, Xcode for macOS, Android SDK/JDK 17 for Android, or Visual Studio's C++ desktop workload for Windows.
@@ -50,6 +59,16 @@ flutter run -d macos
 ```
 
 Open **Add your lights**. The [setup guide](LOCAL_SETUP.md) covers Tapo credentials, Wipro/Tuya keys, IP reservations and limitations. Old Home Assistant settings are not used or migrated into direct device credentials; the previous implementation remains in Git history.
+
+## Install on Windows
+
+1. Sign in to GitHub and open the successful [SmartLight Actions run](https://github.com/Aditya-1209/SmartLight/actions) for the version you want. Under **Artifacts**, download **SmartLight-Windows**. See [GitHub’s download instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts).
+2. Right-click the downloaded ZIP, choose **Extract All**, and keep the complete extracted folder together. Launch **smart_light.exe** from that folder; the adjacent DLLs and `data` folder are required. An APK is for Android and cannot be used as the Windows app.
+3. Connect the Windows laptop to the same home Wi-Fi as the lights.
+4. On your working phone or Mac, open **Settings → Use lights on another device → Send setup**. Choose a transfer password of at least 12 characters and select **Create encrypted code**, then **Copy encrypted code**.
+5. On Windows, open **Settings → Use lights on another device → Receive setup**. Enter the code and the same transfer password, select **Unlock and review**, then **Save selected lights**. This imports light connections without pairing the lights again; it does not transfer custom scenes.
+
+For the new interface, automatic Tapo address recovery and built-in timers, choose a completed **2.6.0 / build 12** run. The older 2.4.0 download does not include these features. Windows packages contain the entire app folder, not just the executable.
 
 ## Build and test
 

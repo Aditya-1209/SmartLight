@@ -8,10 +8,12 @@ import 'package:http/http.dart' as http;
 import '../../models/connection_config.dart';
 import '../../models/light_command.dart';
 import '../../models/light_entity.dart';
+import '../../models/light_timer.dart';
 import '../device_exception.dart';
 import 'color_math.dart';
 import 'crypto_utils.dart';
 import 'device_client.dart';
+import 'device_timer_client.dart';
 import 'tapo_aes.dart';
 import 'tapo_http_client.dart';
 import 'tapo_lan_http_client.dart';
@@ -54,7 +56,7 @@ class KlapCipher {
   }
 }
 
-class TapoClient implements DeviceClient {
+class TapoClient implements DeviceClient, DeviceTimerClient {
   TapoClient(
     this.config, {
     http.Client Function()? clientFactory,
@@ -455,6 +457,95 @@ class TapoClient implements DeviceClient {
       _queue.run(() async {
         await _request('set_device_info', commandData(light, command));
       });
+
+  Future<LightTimerStatus> _readTimer() async {
+    final data = await _request('get_countdown_rules', {});
+    final rules = data['rule_list'];
+    if (rules is! List || rules.length > 1) {
+      throw const DeviceException(
+        DeviceError.malformed,
+        'This light returned an unsupported timer list. Check timers in Tapo.',
+      );
+    }
+    LightTimer? active;
+    for (final raw in rules) {
+      if (raw is! Map) throw timerUnconfirmed;
+      if (raw['enable'] == false || raw['enable'] == 0) continue;
+      final remaining = raw['remain'];
+      if (remaining == 0) continue;
+      final states = raw['desired_states'];
+      final desired = states is Map ? states['on'] : null;
+      final on = desired is bool
+          ? desired
+          : switch (raw['action']) {
+              'on' => true,
+              'off' => false,
+              _ => null,
+            };
+      if (remaining is! int ||
+          remaining < 0 ||
+          remaining > 86400 ||
+          raw['id'] is! String ||
+          on == null) {
+        throw const DeviceException(
+          DeviceError.malformed,
+          'Could not read this light’s timer. Check timers in Tapo.',
+        );
+      }
+      active = LightTimer(
+        id: raw['id'] as String,
+        endsAt: DateTime.now().add(Duration(seconds: remaining)),
+        on: on,
+      );
+    }
+    // Tapo timers specify the target state explicitly, independent of power now.
+    return LightTimerStatus(isOn: false, active: active);
+  }
+
+  @override
+  Future<LightTimerStatus> readTimer() => _queue.run(_readTimer);
+
+  @override
+  Future<LightTimerStatus> setTimer(DateTime endsAt, {required bool on}) =>
+      _queue.run(() async {
+        requireTimerAvailable(await _readTimer(), on);
+        countdownSeconds(endsAt);
+        // Firmware may retain an expired/disabled rule. Active timers were
+        // checked above; creating a timer never silently replaces one.
+        await _request('remove_countdown_rules', {'remove_all': true});
+        final seconds = countdownSeconds(endsAt);
+        try {
+          await _request('add_countdown_rule', {
+            'enable': true,
+            'delay': seconds,
+            'desired_states': {'on': on},
+          });
+          final confirmed = await _readTimer();
+          final timer = confirmed.active;
+          if (timer == null ||
+              timer.on != on ||
+              timer.endsAt.difference(endsAt).inSeconds.abs() > 10) {
+            throw timerUnconfirmed;
+          }
+          return confirmed;
+        } catch (_) {
+          throw timerUnconfirmed;
+        }
+      });
+
+  @override
+  Future<LightTimerStatus> cancelTimer() => _queue.run(() async {
+    final current = await _readTimer();
+    if (current.active == null) return current;
+    try {
+      await _request('remove_countdown_rules', {'remove_all': true});
+      final confirmed = await _readTimer();
+      if (confirmed.active != null) throw timerUnconfirmed;
+      return confirmed;
+    } catch (_) {
+      throw timerUnconfirmed;
+    }
+  });
   @override
   void dispose() {
     _disposed = true;

@@ -11,6 +11,7 @@ import '../../widgets/design_assets.dart';
 import '../../widgets/light_card.dart';
 import '../../widgets/scene_card.dart';
 import '../device_detail/device_detail_screen.dart';
+import '../timers/timers_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key, required this.onSetup, this.onScenes});
@@ -273,6 +274,15 @@ class DashboardScreen extends ConsumerWidget {
             else
               hero(false),
             const SizedBox(height: 20),
+            if (state.configured) ...[
+              OutlinedButton.icon(
+                key: const ValueKey('room-timers'),
+                onPressed: () => openTimers(context),
+                icon: const Icon(Icons.timer_outlined),
+                label: const Text('Timers & schedules'),
+              ),
+              const SizedBox(height: 20),
+            ],
             Row(
               children: [
                 Expanded(

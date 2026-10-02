@@ -3,9 +3,11 @@ import 'dart:async';
 import '../models/connection_config.dart';
 import '../models/light_command.dart';
 import '../models/light_entity.dart';
+import '../models/light_timer.dart';
 import '../services/connection_status.dart';
 import '../services/device_exception.dart';
 import '../services/local/device_client.dart';
+import '../services/local/device_timer_client.dart';
 import '../services/local/auto_tapo_client.dart';
 import '../services/local/tapo_discovery.dart';
 import '../services/local/tuya_client.dart';
@@ -23,7 +25,17 @@ abstract interface class LightsRepository {
 
 typedef DeviceClientFactory = DeviceClient Function(DeviceConnection config);
 
-class LocalLightsRepository implements LightsRepository {
+abstract interface class LightTimersRepository {
+  Future<LightTimerStatus> readTimer(String id);
+  Future<LightTimerStatus> setTimer(
+    String id,
+    DateTime endsAt, {
+    required bool on,
+  });
+  Future<LightTimerStatus> cancelTimer(String id);
+}
+
+class LocalLightsRepository implements LightsRepository, LightTimersRepository {
   LocalLightsRepository(
     this.config, {
     DeviceClientFactory? factory,
@@ -99,6 +111,27 @@ class LocalLightsRepository implements LightsRepository {
   @override
   Future<void> command(LightEntity light, LightCommand command) =>
       _client(light.entityId).command(light, command);
+
+  DeviceTimerClient _timerClient(String id) {
+    final client = _client(id);
+    if (client is DeviceTimerClient) return client as DeviceTimerClient;
+    throw const DeviceException(
+      DeviceError.unavailable,
+      'This light does not support built-in timers.',
+    );
+  }
+
+  @override
+  Future<LightTimerStatus> readTimer(String id) => _timerClient(id).readTimer();
+  @override
+  Future<LightTimerStatus> setTimer(
+    String id,
+    DateTime endsAt, {
+    required bool on,
+  }) => _timerClient(id).setTimer(endsAt, on: on);
+  @override
+  Future<LightTimerStatus> cancelTimer(String id) =>
+      _timerClient(id).cancelTimer();
   @override
   void start() {}
   @override

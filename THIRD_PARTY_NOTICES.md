@@ -9,6 +9,7 @@ Protocol format/algorithm references:
 - PyP100, https://github.com/fishbigger/TapoP100 (MIT). Legacy RSA key exchange, AES-CBC secure passthrough, and login v1 wire format.
 - esp-tapo, https://github.com/Alejandro12120/esp-tapo (MIT). KLAP session derivation and encrypted transport description. SmartLight additionally verifies response signatures.
 - python-kasa's public L920 fixtures and UDP discovery packet format (https://github.com/python-kasa/python-kasa/blob/master/kasa/discover.py) were consulted for device capability and wire-format facts; no Python runtime or python-kasa source is bundled.
+- Tapo Rust library countdown request/response definitions (https://github.com/mihai-dinculescu/tapo/tree/main/tapo/src/requests) and PyP100 were consulted for timer wire-format facts. No Rust source or runtime is bundled. Tuya's official lighting DP definition (https://developer.tuya.com/en/docs/iot/product-function-definition?_source=github&id=K9s9rhj576ypf) and panel countdown semantics (https://developer.tuya.com/en/docs/iot/product-panel-dp-interactive-description?_source=c1bd9002df6536b2e2ca8d917825d4e5&id=K9s9rhiowe806) document optional DP26, its limits and power-change cancellation.
 
 
 MIT License

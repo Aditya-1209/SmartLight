@@ -2,6 +2,19 @@
 
 Automated protocol tests do not replace this checklist. Use a trusted room Wi-Fi network and enter credentials only in the app. No Home Assistant, Docker or background helper should run during these checks.
 
+## Built-in timers (2.6.0)
+
+- Open **Timers & schedules** and confirm each light reports timer availability. A missing/invalid Wipro DP26 must show unsupported, and an unreachable light must show a check failure.
+- With a chosen light on, set a one-minute off timer, confirm it appears, then fully quit SmartLight. Verify the physical light goes off without the app running. Repeat for each supported model/firmware.
+- Set a timer on one platform and read/cancel it from another platform with the same saved connection. Confirm cancellation on the first platform after refresh.
+- Set a one-time clock action across midnight; verify the Today/Tomorrow label and physical action. These are not repeating daily schedules.
+- Confirm a Wipro off timer requires power on first; change its power through normal controls and verify the timer cancels. A Wipro on timer requires power off first.
+- Confirm an existing vendor-app countdown is displayed and cannot be silently overwritten. Ordinary vendor schedules may still act independently.
+- With one light unavailable, schedule the other lights and verify the report names the failed light without claiming the whole room succeeded. Lost acknowledgements must not automatically replay a timer write.
+- Leave wall power on. Record whether a power outage clears each firmware’s countdown rather than assuming persistence through a power loss.
+
+## General controls
+
 | Check | Pass | Fail | Notes |
 |---|---|---|---|
 | Pair lights in their original vendor apps; confirm normal operation | [ ] | [ ] | |

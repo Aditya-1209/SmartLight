@@ -8,6 +8,7 @@ import '../models/connection_config.dart';
 import '../models/device_slot.dart';
 import '../models/light_command.dart';
 import '../models/light_entity.dart';
+import '../models/light_timer.dart';
 import '../models/scene.dart';
 import '../repositories/lights_repository.dart';
 import '../repositories/settings_repository.dart';
@@ -105,16 +106,18 @@ class ActionReport {
     required this.succeeded,
     required this.failed,
     required this.skipped,
+    this.successVerb = 'updated',
   });
   final List<String> succeeded;
   final Map<String, String> failed;
   final List<String> skipped;
+  final String successVerb;
   bool get hasFailures => failed.isNotEmpty;
   String get message => failed.isNotEmpty
       ? failed.entries.map((e) => '${e.key}: ${e.value}').join(' • ')
       : succeeded.isEmpty
       ? 'No compatible connected lights.'
-      : '${succeeded.length} ${succeeded.length == 1 ? 'light' : 'lights'} updated${skipped.isEmpty ? '.' : '; ${skipped.length} unsupported skipped.'}';
+      : '${succeeded.length} ${succeeded.length == 1 ? 'light' : 'lights'} $successVerb${skipped.isEmpty ? '.' : '; ${skipped.length} unsupported skipped.'}';
 }
 
 class AppController extends Notifier<AppState> {
@@ -547,6 +550,77 @@ class AppController extends Notifier<AppState> {
   Future<ActionReport> controlAll(LightCommand command) =>
       _run({for (final s in state.slots) s.id: command}, skipUnsupported: true);
   Future<ActionReport> applyScene(LightScene scene) => _run(scene.commands);
+
+  Future<LightTimerStatus> readTimer(String slotId) async {
+    final backend = _backend;
+    final slot = state.slots.where((s) => s.id == slotId).firstOrNull;
+    if (backend is! LightTimersRepository || slot?.entityId == null) {
+      throw const DeviceException(
+        DeviceError.unavailable,
+        'Connect this light to check its built-in timer.',
+      );
+    }
+    return (backend as LightTimersRepository).readTimer(slot!.entityId!);
+  }
+
+  Future<ActionReport> scheduleTimers(
+    Set<String> slotIds,
+    DateTime endsAt, {
+    required bool on,
+  }) => _runTimers(slotIds, endsAt: endsAt, on: on);
+
+  Future<ActionReport> cancelLightTimer(String slotId) => _runTimers({slotId});
+
+  Future<ActionReport> _runTimers(
+    Set<String> slotIds, {
+    DateTime? endsAt,
+    bool on = false,
+  }) async {
+    final backend = _backend;
+    final generation = _generation;
+    final targets = state.slots.where((s) => slotIds.contains(s.id)).toList();
+    if (state.busy.isNotEmpty) {
+      return ActionReport(
+        succeeded: [],
+        failed: {'Timers': 'Wait for the current action to finish.'},
+        skipped: [],
+      );
+    }
+    final succeeded = <String>[];
+    final failed = <String, String>{};
+    state = state.copyWith(busy: targets.map((s) => s.id).toSet());
+    await Future.wait(
+      targets.map((slot) async {
+        try {
+          if (backend is! LightTimersRepository || slot.entityId == null) {
+            throw const DeviceException(
+              DeviceError.unavailable,
+              'Connect this light first.',
+            );
+          }
+          final timers = backend as LightTimersRepository;
+          if (endsAt == null) {
+            await timers.cancelTimer(slot.entityId!);
+          } else {
+            await timers.setTimer(slot.entityId!, endsAt, on: on);
+          }
+          succeeded.add(slot.name);
+        } catch (error) {
+          failed[slot.name] = userMessage(error);
+        }
+      }),
+    );
+    if (!_disposed && generation == _generation) {
+      state = state.copyWith(busy: {});
+    }
+    return ActionReport(
+      succeeded: succeeded,
+      failed: failed,
+      skipped: [],
+      successVerb: endsAt == null ? 'timer cancelled' : 'timer set',
+    );
+  }
+
   Future<ActionReport> _run(
     Map<String, LightCommand> commands, {
     bool skipUnsupported = false,

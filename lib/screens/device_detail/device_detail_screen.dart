@@ -9,6 +9,7 @@ import '../../widgets/color_picker.dart';
 import '../../widgets/common.dart';
 import '../../widgets/design_assets.dart';
 import '../scenes/scene_editor_screen.dart';
+import '../timers/timers_screen.dart';
 
 class DeviceDetailScreen extends ConsumerWidget {
   const DeviceDetailScreen({required this.slotId, super.key});
@@ -220,6 +221,14 @@ class DeviceDetailScreen extends ConsumerWidget {
                 ),
               ],
               const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: slot.entityId != null
+                    ? () => openTimers(context, slotId: slotId)
+                    : null,
+                icon: const Icon(Icons.timer_outlined),
+                label: const Text('Timers & schedules'),
+              ),
+              const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: light?.available == true
                     ? () => openSceneEditor(context, initialSlotId: slotId)

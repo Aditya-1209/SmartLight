@@ -1,9 +1,11 @@
 import '../../models/connection_config.dart';
 import '../../models/light_command.dart';
 import '../../models/light_entity.dart';
+import '../../models/light_timer.dart';
 import '../device_exception.dart';
 import 'color_math.dart';
 import 'device_client.dart';
+import 'device_timer_client.dart';
 import 'tuya_protocol.dart';
 
 class TuyaLightMapper {
@@ -142,13 +144,87 @@ class TuyaLightMapper {
   }
 }
 
-class TuyaClient implements DeviceClient {
+class TuyaClient implements DeviceClient, DeviceTimerClient {
   TuyaClient(DeviceConnection config, {TuyaTransport? transport})
     : _transport = transport ?? TuyaTransport(config),
       _mapper = TuyaLightMapper(config);
   final TuyaTransport _transport;
   final TuyaLightMapper _mapper;
   final _queue = DeviceQueue();
+
+  LightTimerStatus _timerStatus(Map<String, dynamic> dps) {
+    final light = _mapper.parse(dps);
+    final seconds = dps['26'];
+    if (!_mapper.modern || seconds is! int || seconds < 0 || seconds > 86400) {
+      return LightTimerStatus(
+        isOn: light.isOn,
+        unsupportedReason:
+            'This light does not report a supported built-in timer.',
+      );
+    }
+    return LightTimerStatus(
+      isOn: light.isOn,
+      togglesPower: true,
+      active: seconds == 0
+          ? null
+          : LightTimer(
+              id: 'countdown',
+              endsAt: DateTime.now().add(Duration(seconds: seconds)),
+              on: !light.isOn,
+            ),
+    );
+  }
+
+  Future<LightTimerStatus> _readTimer() async =>
+      _timerStatus(await _transport.exchange());
+
+  @override
+  Future<LightTimerStatus> readTimer() => _queue.run(_readTimer);
+
+  @override
+  Future<LightTimerStatus> setTimer(DateTime endsAt, {required bool on}) =>
+      _queue.run(() async {
+        final current = await _readTimer();
+        requireTimerAvailable(current, on);
+        final seconds = countdownSeconds(endsAt);
+        try {
+          // DP26 reverses power; never change power to make a timer fit.
+          await _transport.exchange(dps: {'26': seconds});
+          final confirmed = await _readTimer();
+          final timer = confirmed.active;
+          if (timer == null ||
+              timer.on != on ||
+              timer.endsAt.difference(endsAt).inSeconds.abs() > 35) {
+            throw timerUnconfirmed;
+          }
+          return confirmed;
+        } catch (_) {
+          // Do not replay a write whose acknowledgement/read-back was lost.
+          throw timerUnconfirmed;
+        }
+      });
+
+  @override
+  Future<LightTimerStatus> cancelTimer() => _queue.run(() async {
+    final current = await _readTimer();
+    if (!current.supported) {
+      throw DeviceException(
+        DeviceError.unavailable,
+        current.unsupportedReason!,
+      );
+    }
+    if (current.active == null) return current;
+    try {
+      await _transport.exchange(dps: {'26': 0});
+      final confirmed = await _readTimer();
+      if (confirmed.active != null || !confirmed.supported) {
+        throw timerUnconfirmed;
+      }
+      return confirmed;
+    } catch (_) {
+      throw timerUnconfirmed;
+    }
+  });
   @override
   Future<LightEntity> read() =>
       _queue.run(() async => _mapper.parse(await _transport.exchange()));

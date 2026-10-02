@@ -6,11 +6,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_light/models/connection_config.dart';
 import 'package:smart_light/models/light_command.dart';
 import 'package:smart_light/models/light_entity.dart';
+import 'package:smart_light/models/light_timer.dart';
 import 'package:smart_light/providers/app_controller.dart';
 import 'package:smart_light/repositories/lights_repository.dart';
 import 'package:smart_light/services/device_exception.dart';
 import 'package:smart_light/services/local/auto_tapo_client.dart';
 import 'package:smart_light/services/local/device_client.dart';
+import 'package:smart_light/services/local/device_timer_client.dart';
 import 'package:smart_light/services/local/tapo_discovery.dart';
 
 import 'support.dart';
@@ -55,7 +57,64 @@ class FakeTapo implements DeviceClient {
   }
 }
 
+class FakeTimerTapo extends FakeTapo implements DeviceTimerClient {
+  FakeTimerTapo({super.macAddress, super.readError});
+  int timerWrites = 0;
+  Object? timerError;
+  @override
+  Future<LightTimerStatus> readTimer() async =>
+      const LightTimerStatus(isOn: true);
+  @override
+  Future<LightTimerStatus> setTimer(DateTime endsAt, {required bool on}) async {
+    timerWrites++;
+    if (timerError != null) throw timerError!;
+    return LightTimerStatus(
+      isOn: true,
+      active: LightTimer(id: 'fixture', endsAt: endsAt, on: on),
+    );
+  }
+
+  @override
+  Future<LightTimerStatus> cancelTimer() async {
+    timerWrites++;
+    return readTimer();
+  }
+}
+
 void main() {
+  test('timer writes rediscover and authenticate identity; uncertain writes are not replayed', () async {
+    final old = FakeTimerTapo(readError: offline), moved = FakeTimerTapo();
+    var discoveries = 0;
+    final client = AutoTapoClient(
+      tapoConfig().withAddress(macAddress: mac),
+      factory: (config) => config.host == newHost ? moved : old,
+      discover: () async {
+        discoveries++;
+        return [candidate];
+      },
+    );
+    addTearDown(client.dispose);
+    await client.setTimer(
+      DateTime.now().add(const Duration(minutes: 2)),
+      on: false,
+    );
+    expect(old.timerWrites, 0);
+    expect(moved.timerWrites, 1);
+    expect(discoveries, 1);
+    moved.timerError = offline;
+    await expectLater(
+      client.setTimer(
+        DateTime.now().add(const Duration(minutes: 2)),
+        on: false,
+      ),
+      throwsA(same(offline)),
+    );
+    expect(moved.timerWrites, 2);
+    expect(discoveries, 1);
+    moved.macAddress = otherMac;
+    await expectLater(client.cancelTimer(), throwsA(isA<DeviceException>()));
+    expect(moved.timerWrites, 2);
+  });
   List<int> packet({String type = 'SMART.TAPOBULB', String address = mac}) => [
     ...List.filled(16, 0),
     ...utf8.encode(

@@ -3,11 +3,12 @@ import 'dart:async';
 import '../models/device_slot.dart';
 import '../models/light_command.dart';
 import '../models/light_entity.dart';
+import '../models/light_timer.dart';
 import '../repositories/lights_repository.dart';
 import 'device_exception.dart';
 import 'connection_status.dart';
 
-class DemoLights implements LightsRepository {
+class DemoLights implements LightsRepository, LightTimersRepository {
   DemoLights({this.latency = const Duration(milliseconds: 100)}) {
     for (final slot in DeviceSlot.demo) {
       final strip = slot.id == 'strip';
@@ -29,6 +30,7 @@ class DemoLights implements LightsRepository {
   }
   final Duration latency;
   final _lights = <String, LightEntity>{};
+  final _timers = <String, LightTimer>{};
   final _updates = StreamController<LightEntity>.broadcast();
   final _statuses = StreamController<ConnectionStatus>.broadcast();
   bool offline = false;
@@ -45,6 +47,19 @@ class DemoLights implements LightsRepository {
         DeviceError.unreachable,
         'Room Wi-Fi offline (demo).',
       );
+    }
+    for (final entry in _timers.entries.toList()) {
+      if (entry.value.endsAt.isAfter(DateTime.now())) continue;
+      final light = _lights[entry.key]!;
+      _emit(
+        LightEntity(
+          entityId: light.entityId,
+          friendlyName: light.friendlyName,
+          state: entry.value.on ? 'on' : 'off',
+          attributes: light.rawAttributes,
+        ),
+      );
+      _timers.remove(entry.key);
     }
   }
 
@@ -77,6 +92,10 @@ class DemoLights implements LightsRepository {
         DeviceError.unavailable,
         'Device unavailable.',
       );
+    }
+    if (!light.entityId.contains('tapo') &&
+        current.isOn != (command.service != 'turn_off')) {
+      _timers.remove(light.entityId);
     }
     final data = command.toServiceData(current)..remove('entity_id');
     final attrs = {...current.rawAttributes, ...data};
@@ -118,6 +137,49 @@ class DemoLights implements LightsRepository {
         value ? ConnectionStatus.reconnecting : ConnectionStatus.connected,
       );
     }
+  }
+
+  @override
+  Future<LightTimerStatus> readTimer(String id) async {
+    await _check();
+    final light = _lights[id];
+    if (light == null || !light.available) {
+      throw const DeviceException(
+        DeviceError.unavailable,
+        'Light unavailable.',
+      );
+    }
+    return LightTimerStatus(
+      isOn: light.isOn,
+      active: _timers[id],
+      togglesPower: !id.contains('tapo'),
+    );
+  }
+
+  @override
+  Future<LightTimerStatus> setTimer(
+    String id,
+    DateTime endsAt, {
+    required bool on,
+  }) async {
+    final current = await readTimer(id);
+    requireTimerAvailable(current, on);
+    countdownSeconds(endsAt);
+    if (failCommands.contains(id)) {
+      throw const DeviceException(DeviceError.server, 'Demo timer rejected.');
+    }
+    _timers[id] = LightTimer(id: 'demo', endsAt: endsAt, on: on);
+    return readTimer(id);
+  }
+
+  @override
+  Future<LightTimerStatus> cancelTimer(String id) async {
+    await readTimer(id);
+    if (failCommands.contains(id)) {
+      throw const DeviceException(DeviceError.server, 'Demo timer rejected.');
+    }
+    _timers.remove(id);
+    return readTimer(id);
   }
 
   @override

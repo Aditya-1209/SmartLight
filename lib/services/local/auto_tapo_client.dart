@@ -1,8 +1,10 @@
 import '../../models/connection_config.dart';
 import '../../models/light_command.dart';
 import '../../models/light_entity.dart';
+import '../../models/light_timer.dart';
 import '../device_exception.dart';
 import 'device_client.dart';
+import 'device_timer_client.dart';
 import 'tapo_client.dart';
 import 'tapo_discovery.dart';
 
@@ -13,7 +15,7 @@ class ResolvedConnection {
 
 /// Rediscovers only a previously verified MAC. New/legacy setups choose a light
 /// explicitly with Find Tapo light when their old IP no longer works.
-class AutoTapoClient implements DeviceClient {
+class AutoTapoClient implements DeviceClient, DeviceTimerClient {
   AutoTapoClient(
     this.config, {
     TapoDiscover? discover,
@@ -134,6 +136,33 @@ class AutoTapoClient implements DeviceClient {
       await _client.command(current, command);
     },
   );
+
+  @override
+  Future<LightTimerStatus> readTimer() =>
+      _withTimer((client) => client.readTimer());
+
+  @override
+  Future<LightTimerStatus> setTimer(DateTime endsAt, {required bool on}) =>
+      _withTimer((client) => client.setTimer(endsAt, on: on));
+
+  @override
+  Future<LightTimerStatus> cancelTimer() =>
+      _withTimer((client) => client.cancelTimer());
+
+  Future<LightTimerStatus> _withTimer(
+    Future<LightTimerStatus> Function(DeviceTimerClient) action,
+  ) => _queue.run(() async {
+    await _read();
+    _checkOpen();
+    final client = _client;
+    if (client is! DeviceTimerClient) {
+      throw const DeviceException(
+        DeviceError.unavailable,
+        'Built-in timers are not supported.',
+      );
+    }
+    return action(client as DeviceTimerClient);
+  });
 
   @override
   void dispose() {
