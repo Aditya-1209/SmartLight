@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -132,6 +133,7 @@ class AppController extends Notifier<AppState> {
   Future<void>? _initialization;
   bool _storageReady = false;
   final Map<String, int> _revisions = {};
+  final _pendingAddresses = <String, ResolvedConnection>{};
   final _configurationQueue = DeviceQueue();
   @override
   AppState build() {
@@ -185,6 +187,7 @@ class AppController extends Notifier<AppState> {
     _backend?.dispose();
     _backend = null;
     _revisions.clear();
+    _pendingAddresses.clear();
   }
 
   Future<void> _attach() async {
@@ -212,24 +215,37 @@ class AppController extends Notifier<AppState> {
             final saved = devices
                 ?.where((d) => d.slotId == event.previous.slotId)
                 .firstOrNull;
+            final prior =
+                _pendingAddresses[event.previous.slotId]?.current ?? saved;
             if (saved == null ||
-                saved.host != event.previous.host ||
-                saved.macAddress != event.previous.macAddress) {
+                prior == null ||
+                !mapEquals(prior.toJson(), event.previous.toJson())) {
+              return;
+            }
+            _pendingAddresses[saved.slotId] = ResolvedConnection(
+              saved,
+              event.current,
+            );
+            final updated = [
+              for (final device in devices!)
+                _pendingAddresses[device.slotId]?.current ?? device,
+            ];
+            // DHCP can swap the two tubes' old addresses. Wait for both
+            // verified resolutions and persist the swap in one atomic write.
+            if (updated.map((d) => d.host).toSet().length != updated.length) {
               return;
             }
             try {
-              final config = ConnectionConfig([
-                for (final device in devices!)
-                  device.slotId == saved.slotId ? event.current : device,
-              ]);
+              final config = ConnectionConfig(updated);
               await ref.read(credentialStoreProvider).write(config);
               if (!_disposed && generation == _generation) {
                 state = state.copyWith(config: config);
+                _pendingAddresses.clear();
               }
             } catch (_) {
               if (!_disposed && generation == _generation) {
                 state = state.copyWith(
-                  error: 'Tapo reconnected, but its new address could not be saved. Check Keychain access.',
+                  error: 'Light reconnected, but its new address could not be saved. Check secure storage access.',
                 );
               }
             }
@@ -352,7 +368,9 @@ class AppController extends Notifier<AppState> {
             'No usable light state.',
           );
         }
-        return candidate;
+        return candidate.withAddress(
+          host: light.rawAttributes['connection_host'] as String?,
+        );
       } on DeviceException catch (error) {
         if (error.kind == DeviceError.unreachable) rethrow;
         // Only our fixed categories reach the UI, never a parser/vendor error.
@@ -379,14 +397,12 @@ class AppController extends Notifier<AppState> {
   Future<void> _saveDevice(DeviceConnection device) async {
     await _ensureStorageReady();
     final light = await inspectDevice(device);
-    if (device.brand == DeviceBrand.tapo) {
-      device = device.withAddress(
-        host: light.rawAttributes['connection_host'] as String?,
-        macAddress: DeviceConnection.normalizeMac(
-          light.rawAttributes['device_mac'],
-        ),
-      );
-    }
+    device = device.withAddress(
+      host: light.rawAttributes['connection_host'] as String?,
+      macAddress: DeviceConnection.normalizeMac(
+        light.rawAttributes['device_mac'],
+      ),
+    );
     final devices = [
       ...?state.config?.devices.where((d) => d.slotId != device.slotId),
       device,

@@ -5,11 +5,13 @@ import '../../models/connection_config.dart';
 import '../local/crypto_utils.dart';
 import '../local/tuya_protocol.dart';
 
-/// Short-lived listener used only while pairing. Broadcasts are hints; the
+/// Short-lived listener used during pairing and address recovery. Broadcasts are hints; the
 /// existing authenticated TCP connection must succeed before a light is saved.
 class TuyaDiscovery {
   final _sockets = <RawDatagramSocket>[];
   final devices = <String, Map<String, dynamic>>{};
+  // Keep every ID/address pair so conflicting announcements remain ambiguous.
+  final addresses = <String, Map<String, dynamic>>{};
   bool _closed = false;
   static final _key = md5(ascii.encode('yGAdlopoPVldABfn'));
 
@@ -26,7 +28,10 @@ class TuyaDiscovery {
                 readU32(packet, packet.length - 8)) {
           return null;
         }
-        payload = packet.sublist(20, packet.length - 8);
+        payload = packet.sublist(16, packet.length - 8);
+        if (payload.length >= 4 && payload.take(4).every((v) => v == 0)) {
+          payload = payload.sublist(4);
+        }
         if (payload.isEmpty) return null;
         if (payload.first != 123) {
           payload = aesBlock(payload, _key, encrypt: false);
@@ -72,10 +77,16 @@ class TuyaDiscovery {
         socket.listen((event) {
           if (event != RawSocketEvent.read || _closed) return;
           Datagram? datagram;
-          while ((datagram = socket.receive()) != null) {
+          for (
+            var received = 0;
+            received < 128 && (datagram = socket.receive()) != null;
+            received++
+          ) {
             final data = decode(datagram!.data, datagram.address.address);
-            if (data != null && devices.length < 128) {
-              devices[data['deviceId'] as String] = data;
+            if (data != null && addresses.length < 128) {
+              final id = data['deviceId'] as String;
+              devices[id] = data;
+              addresses['$id/${data['host']}'] = data;
             }
           }
         }, onError: (Object _) {});
@@ -83,6 +94,11 @@ class TuyaDiscovery {
         /* Manual IP entry remains available. */
       }
     }
+    await probe(bindAddress);
+  }
+
+  Future<void> probe(String bindAddress) async {
+    if (_closed || !DeviceConnection.isLocalAddress(bindAddress)) return;
     try {
       final socket = await RawDatagramSocket.bind(bindAddress, 0);
       if (_closed) {

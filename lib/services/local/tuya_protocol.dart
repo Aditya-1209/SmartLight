@@ -340,6 +340,17 @@ class TuyaTransport {
           );
         }
         final data = value['data'] is Map ? value['data'] as Map : value;
+        for (final source in [value, data]) {
+          for (final field in ['gwId', 'devId']) {
+            final id = source[field];
+            if (id != null && id != config.deviceId) {
+              throw const DeviceException(
+                DeviceError.unauthorized,
+                'This address belongs to a different light.',
+              );
+            }
+          }
+        }
         return data['dps'] is Map
             ? Map<String, dynamic>.from(data['dps'] as Map)
             : {};

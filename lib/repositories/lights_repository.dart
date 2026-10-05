@@ -10,7 +10,8 @@ import '../services/local/device_client.dart';
 import '../services/local/device_timer_client.dart';
 import '../services/local/auto_tapo_client.dart';
 import '../services/local/tapo_discovery.dart';
-import '../services/local/tuya_client.dart';
+import '../services/local/auto_tuya_client.dart';
+import '../services/local/tuya_lan_discovery.dart';
 
 abstract interface class LightsRepository {
   Stream<LightEntity> get updates;
@@ -41,7 +42,10 @@ class LocalLightsRepository implements LightsRepository, LightTimersRepository {
     DeviceClientFactory? factory,
     DeviceClientFactory? tapoClientFactory,
     TapoDiscover? tapoDiscover,
+    DeviceClientFactory? tuyaClientFactory,
+    TuyaDiscover? tuyaDiscover,
   }) {
+    final discovery = TuyaLanDiscovery();
     for (final device in config.devices) {
       _clients[device.entityId] =
           factory?.call(device) ??
@@ -54,7 +58,14 @@ class LocalLightsRepository implements LightsRepository, LightTimersRepository {
                     if (!_disposed) _connections.add(event);
                   },
                 )
-              : TuyaClient(device));
+              : AutoTuyaClient(
+                  device,
+                  factory: tuyaClientFactory,
+                  discover: tuyaDiscover ?? discovery.discover,
+                  onResolved: (event) {
+                    if (!_disposed) _connections.add(event);
+                  },
+                ));
     }
   }
   final ConnectionConfig config;

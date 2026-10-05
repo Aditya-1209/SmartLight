@@ -7,11 +7,9 @@ import 'device_client.dart';
 import 'device_timer_client.dart';
 import 'tapo_client.dart';
 import 'tapo_discovery.dart';
+import 'resolved_connection.dart';
 
-class ResolvedConnection {
-  const ResolvedConnection(this.previous, this.current);
-  final DeviceConnection previous, current;
-}
+export 'resolved_connection.dart';
 
 /// Rediscovers only a previously verified MAC. New/legacy setups choose a light
 /// explicitly with Find Tapo light when their old IP no longer works.
