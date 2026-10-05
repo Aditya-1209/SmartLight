@@ -63,7 +63,7 @@ Open **Add your lights**. The [setup guide](LOCAL_SETUP.md) covers Tapo credenti
 
 ## Install on Windows
 
-1. Sign in to GitHub and download [SmartLight-Windows 2.6.0](https://github.com/Aditya-1209/SmartLight/actions/runs/36981421137/artifacts/11215687025) from the successful [2.6.0 build](https://github.com/Aditya-1209/SmartLight/actions/runs/36981421137). You can also find **SmartLight-Windows** under that run’s **Artifacts**. See [GitHub’s download instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts).
+1. Sign in to GitHub and open the latest successful **2.6.1 / build 13** run in [SmartLight Actions](https://github.com/Aditya-1209/SmartLight/actions). Under **Artifacts**, download **SmartLight-Windows**. This version includes automatic Wipro tube address recovery. See [GitHub’s download instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts).
 2. Right-click the downloaded ZIP, choose **Extract All**, and keep the complete extracted folder together. Launch **smart_light.exe** from that folder; the adjacent DLLs and `data` folder are required. An APK is for Android and cannot be used as the Windows app.
 3. Connect the Windows laptop to the same home Wi-Fi as the lights.
 4. On your working phone or Mac, open **Settings → Use lights on another device → Send setup**. Choose a transfer password of at least 12 characters and select **Create encrypted code**, then **Copy encrypted code**.
