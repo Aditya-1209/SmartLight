@@ -21,6 +21,7 @@ The device running SmartLight is the controller. Connections and five-second pol
 - Custom scenes with names, icons, per-light power/brightness/white/color, current-state capture, editing, duplication and undoable deletion. Saving does not send light commands.
 - Built-in light timers: turn on/off after a delay or once at a chosen local clock time within the next 24 hours. Select one or more lights, confirm by reading back from each light, and view/cancel timers from another connected SmartLight device. No server, paid service or background app is used.
 - Add lights one at a time; incomplete rooms remain usable.
+- Automatically find paired Wipro/Tuya tubes by device ID after their IP changes, then verify the existing key before saving the address. Settings also offers **Find this tube**, without resetting or pairing again.
 - Detect the Tuya LAN protocol during setup using read-only checks for 3.3, 3.4 and 3.5.
 - Pair once, then transfer saved connections between Mac, Android and Windows using a password-protected setup code. Import lets you review the lights and keeps other saved connections.
 - Mac in-app fast-blinking (EZ) pairing using your own linked Central Europe Tuya project.
@@ -62,13 +63,13 @@ Open **Add your lights**. The [setup guide](LOCAL_SETUP.md) covers Tapo credenti
 
 ## Install on Windows
 
-1. Sign in to GitHub and download [SmartLight-Windows 2.6.0](https://github.com/Aditya-1209/SmartLight/actions/runs/36981421137/artifacts/11215687025) from the successful [2.6.0 build](https://github.com/Aditya-1209/SmartLight/actions/runs/36981421137). You can also find **SmartLight-Windows** under that run’s **Artifacts**. See [GitHub’s download instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts).
+1. Sign in to GitHub and download [SmartLight-Windows 2.6.1](https://github.com/Aditya-1209/SmartLight/actions/runs/37333721598/artifacts/11355447344) from the successful [2.6.1 / build 13 run](https://github.com/Aditya-1209/SmartLight/actions/runs/37333721598). You can also find **SmartLight-Windows** under that run’s **Artifacts**. This version includes automatic Wipro tube address recovery. See [GitHub’s download instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts).
 2. Right-click the downloaded ZIP, choose **Extract All**, and keep the complete extracted folder together. Launch **smart_light.exe** from that folder; the adjacent DLLs and `data` folder are required. An APK is for Android and cannot be used as the Windows app.
 3. Connect the Windows laptop to the same home Wi-Fi as the lights.
 4. On your working phone or Mac, open **Settings → Use lights on another device → Send setup**. Choose a transfer password of at least 12 characters and select **Create encrypted code**, then **Copy encrypted code**.
 5. On Windows, open **Settings → Use lights on another device → Receive setup**. Enter the code and the same transfer password, select **Unlock and review**, then **Save selected lights**. This imports light connections without pairing the lights again; it does not transfer custom scenes.
 
-For the new interface, automatic Tapo address recovery and built-in timers, choose a completed **2.6.0 / build 12** run. The older 2.4.0 download does not include these features. Windows packages contain the entire app folder, not just the executable.
+For automatic Wipro/Tuya address recovery, choose a completed **2.6.1 / build 13** run from [Actions](https://github.com/Aditya-1209/SmartLight/actions). Version **2.6.0 / build 12** includes the new interface, automatic Tapo address recovery and built-in timers, but only 2.6.1 adds tube address recovery. The older 2.4.0 download does not include these features. Windows packages contain the entire app folder, not just the executable.
 
 ## Build and test
 

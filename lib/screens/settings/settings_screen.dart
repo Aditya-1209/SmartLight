@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/connection_config.dart';
 import '../../services/local/tapo_discovery.dart';
+import '../../services/local/tuya_lan_discovery.dart';
 import '../../models/device_slot.dart';
 import '../../providers/app_controller.dart';
 import '../../services/device_exception.dart';
@@ -18,6 +19,10 @@ import 'setup_transfer_screen.dart';
 
 final tapoDiscoveryProvider = Provider<TapoDiscover>(
   (ref) => TapoDiscovery.discover,
+);
+
+final tuyaDiscoveryProvider = Provider<TuyaDiscover>(
+  (ref) => TuyaLanDiscovery.scan,
 );
 
 class SettingsScreen extends ConsumerWidget {
@@ -154,7 +159,7 @@ class SettingsScreen extends ConsumerWidget {
         const SizedBox(height: 16),
         const AboutListTile(
           applicationName: 'SmartLight',
-          applicationVersion: '2.6.0',
+          applicationVersion: '2.6.1',
           icon: Icon(Icons.info_outline),
         ),
       ],
@@ -283,6 +288,47 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
     }
   }
 
+  Future<void> _findTube() async {
+    if (_id.text.trim().isEmpty) {
+      setState(
+        () => _message = 'Select your already paired tube first so its Device ID is filled in.',
+      );
+      return;
+    }
+    final id = _id.text.trim();
+    setState(() {
+      _working = true;
+      _message = 'Finding this tube on your Wi-Fi…';
+    });
+    try {
+      final found = await ref.read(tuyaDiscoveryProvider)();
+      if (!mounted || _id.text.trim() != id) return;
+      final hosts = found
+          .where(
+            (d) => d.deviceId == id && DeviceConnection.isLocalAddress(d.host),
+          )
+          .map((d) => d.host)
+          .toSet();
+      setState(() {
+        _success = false;
+        if (hosts.length == 1) {
+          _host.text = hosts.single;
+          _message = 'Tube found. Choose Connect & save to verify its existing key and save the new address.';
+        } else {
+          _message = 'Could not identify this tube on the network. Keep its wall switch on, wait for Wi-Fi to reconnect and try again. No factory reset is needed for an IP change.';
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _message = 'Could not search this network. Join your home Wi-Fi and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
   Future<void> _pairWipro() async {
     final device = await Navigator.of(context).push<PairedTuyaDevice>(
       MaterialPageRoute(
@@ -349,10 +395,7 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
     }
     final d = widget.saved;
     final old = oldWidget.saved;
-    if (d != null &&
-        old != null &&
-        d.brand == DeviceBrand.tapo &&
-        _sameDeviceSettings(d, old)) {
+    if (d != null && old != null && _sameDeviceSettings(d, old)) {
       // Background reconnection must not replace unfinished edits in this form.
       if (_host.text == old.host) _host.text = d.host;
       if (_macAddress == old.macAddress) _macAddress = d.macAddress;
@@ -450,7 +493,7 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
         await controller.saveDevice(config);
       } else if (!detect) {
         final light = await controller.inspectDevice(config);
-        if (mounted && config.brand == DeviceBrand.tapo) {
+        if (mounted) {
           setState(() {
             _host.text =
                 light.rawAttributes['connection_host'] as String? ??
@@ -611,6 +654,17 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
             ),
           ),
           _field(_id, 'Device ID', 'device-id'),
+          OutlinedButton.icon(
+            onPressed: _working ? null : _findTube,
+            icon: const Icon(Icons.wifi_find),
+            label: const Text('Find this tube'),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'Saved tubes reconnect automatically when their IP changes. Keep the wall switch on while reconnecting; an IP change does not require a factory reset.',
+            ),
+          ),
           _field(_key, 'Local key (16 bytes)', 'local-key', secret: true),
           DropdownButtonFormField<String>(
             isExpanded: true,

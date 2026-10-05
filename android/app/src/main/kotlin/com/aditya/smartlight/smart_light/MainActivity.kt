@@ -6,8 +6,12 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private var pairing: TuyaPairingBridge? = null
+    private var lanDiscovery: LanDiscoveryBridge? = null
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        lanDiscovery = LanDiscoveryBridge(this)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "smartlight/lan_discovery")
+            .setMethodCallHandler { call, result -> lanDiscovery?.handle(call, result) }
         pairing = TuyaPairingBridge(this)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "smartlight/tuya_pairing")
             .setMethodCallHandler { call, result -> pairing?.handle(call, result) }
@@ -17,7 +21,12 @@ class MainActivity : FlutterActivity() {
         pairing?.onPermissions(code, grants)
     }
     override fun onDestroy() {
+        lanDiscovery?.close()
         pairing?.close()
         super.onDestroy()
+    }
+    override fun onStop() {
+        lanDiscovery?.close()
+        super.onStop()
     }
 }
