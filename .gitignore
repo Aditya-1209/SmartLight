@@ -73,3 +73,7 @@ tuya-raw.json
 # Private, app-specific Tuya SDK configuration and security component.
 /android/tuya.properties
 /android/app/libs/security-algorithm*.aar
+
+# Optional personal room image and its generation prompt stay local.
+/assets/design/room-render.png
+/output/imagegen/room-render-prompt.txt

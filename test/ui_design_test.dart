@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:smart_light/app/app.dart';
 import 'package:smart_light/models/light_command.dart';
 import 'package:smart_light/models/scene.dart';
@@ -13,6 +14,8 @@ import 'package:smart_light/providers/app_controller.dart';
 import 'package:smart_light/repositories/settings_repository.dart';
 
 import 'support.dart';
+
+import 'package:smart_light/widgets/design_assets.dart';
 
 import 'package:smart_light/widgets/light_card.dart';
 import 'package:smart_light/models/device_slot.dart';
@@ -28,7 +31,33 @@ const goldenHour = LightScene(
   },
 );
 
+class MissingRoomRenderBundle extends CachingAssetBundle {
+  @override
+  Future<ByteData> load(String key) {
+    if (key == 'assets/design/room-render.png') {
+      throw FlutterError('No private room image in this build.');
+    }
+    return rootBundle.load(key);
+  }
+}
+
 void main() {
+  testWidgets('public builds fall back when no private room image is bundled', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DefaultAssetBundle(
+          bundle: MissingRoomRenderBundle(),
+          child: const RoomIllustration(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(SvgPicture), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('saved light without a reply is not presented as unpaired', (
     tester,
   ) async {

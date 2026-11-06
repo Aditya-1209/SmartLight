@@ -18,6 +18,7 @@ The device running SmartLight is the controller. Connections and five-second pol
 - Responsive Material 3 dashboard, dark/light/system themes and per-light controls.
 - Swipe between My room, Scenes and Settings, with independent scroll positions and the existing navigation buttons.
 - Choose which presets and custom scenes appear under **My room → Set the mood → Edit**. Selections are saved on this device; hidden scenes remain on the Scenes page.
+- Optional private room preview: local builds can bundle the ignored `assets/design/room-render.png`. On Windows, put a personal `room-render.png` beside `smart_light.exe`. Shared builds retain the default illustration; no personal image is uploaded or included in public packages.
 - Room power, brightness, RGB presets/custom colors and Study/Movie/Chill/Sleep scenes.
 - Figma-based adaptive room overview, live light-card dimmers, scene previews and a three-tab interface for Android, Mac and Windows. Diagnostics are available in Settings.
 - Custom scenes with names, icons, per-light power/brightness/white/color, current-state capture, editing, duplication and undoable deletion. Saving does not send light commands.

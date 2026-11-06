@@ -1,3 +1,9 @@
+## 2026-11-06 — SmartLight 2.7.1 photo-based room preview
+
+- Added an optional private room-render asset at an ignored path. The image and its generation prompt stay local, as requested; the raw reference photo is not included in source control. Local packages bundle the personal image. Shared builds retain the generic vector fallback; Windows can load a private `room-render.png` placed beside its executable. An absent/unreadable personal image falls back without changing room controls.
+- Enlarged the preview in the room-brightness card while retaining the power action, brightness control and light count. No credentials, connections, scene selections or lighting protocol behavior changed.
+- All **16 affected UI/navigation tests passed**, including the missing-private-image fallback, phone/desktop layouts, real slider interactions and swipe navigation. Static analysis and formatting passed. Rendered and visually inspected 360×800 and 1440×1000 dashboard captures with the actual bundled image. Native package/install results are tracked in the pull request after completion.
+
 ## 2026-11-06 — SmartLight 2.7.0 navigation and room scenes
 
 - Replaced tab replacement with a horizontal PageView for My room → Scenes → Settings. Navigation buttons and selected destinations follow swipes, and each page has an independent scroll controller. Existing sliders retain their horizontal drag gestures.

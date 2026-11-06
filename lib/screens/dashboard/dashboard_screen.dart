@@ -123,23 +123,25 @@ class DashboardScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 12),
+          RoomIllustration(height: wide ? 260 : 200),
+          const SizedBox(height: 12),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${brightness.round()}%',
-                    style: theme.textTheme.displayMedium?.copyWith(
-                      fontSize: wide ? 56 : 40,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Text('$onCount lights on', style: theme.textTheme.bodySmall),
-                ],
+              Text(
+                '${brightness.round()}%',
+                style: theme.textTheme.displayMedium?.copyWith(
+                  fontSize: wide ? 56 : 40,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               const SizedBox(width: 12),
-              Expanded(child: RoomIllustration(height: wide ? 114 : 96)),
+              Flexible(
+                child: Text(
+                  '$onCount lights on',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
