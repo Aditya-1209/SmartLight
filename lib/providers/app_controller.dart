@@ -602,7 +602,8 @@ class AppController extends Notifier<AppState> {
       _run({slot.id: command});
   Future<ActionReport> controlAll(LightCommand command) =>
       _run({for (final s in state.slots) s.id: command}, skipUnsupported: true);
-  Future<ActionReport> applyScene(LightScene scene) => _run(scene.commands);
+  Future<ActionReport> applyScene(LightScene scene) =>
+      _run(scene.commands, turnOff: scene.turnOff);
 
   Future<LightTimerStatus> readTimer(String slotId) async {
     final backend = _backend;
@@ -677,10 +678,30 @@ class AppController extends Notifier<AppState> {
   Future<ActionReport> _run(
     Map<String, LightCommand> commands, {
     bool skipUnsupported = false,
+    SceneOffSchedule? turnOff,
   }) async {
     final succeeded = <String>[];
     final failed = <String, String>{};
     final skipped = <String>[];
+    var timersConfirmed = 0;
+    DateTime? endsAt;
+    if (turnOff != null) {
+      try {
+        final validated = SceneOffSchedule.fromJson(turnOff.toJson());
+        endsAt = validated.resolve(DateTime.now());
+        countdownSeconds(endsAt);
+      } catch (error) {
+        return ActionReport(
+          succeeded: [],
+          failed: {
+            'Scene': error is FormatException
+                ? 'Choose a valid scene turn-off time.'
+                : userMessage(error),
+          },
+          skipped: [],
+        );
+      }
+    }
     final backend = _backend;
     final generation = _generation;
     final targets = state.slots
@@ -710,8 +731,48 @@ class AppController extends Notifier<AppState> {
           skipped.add(slot.name);
           return;
         }
+        var applied = false, commandAttempted = false;
         try {
+          void requireCurrent() {
+            if (_disposed || generation != _generation) {
+              throw const DeviceException(
+                DeviceError.unavailable,
+                'Scene setup was interrupted. Check the light and its timer before trying again.',
+              );
+            }
+          }
+
+          final needsTimer = endsAt != null && command.service == 'turn_on';
+          if (needsTimer) {
+            if (backend is! LightTimersRepository) {
+              throw const DeviceException(
+                DeviceError.unavailable,
+                'This light does not support built-in turn-off timers. Scene not applied.',
+              );
+            }
+            final timers = backend as LightTimersRepository;
+            final current = await timers.readTimer(light.entityId);
+            requireCurrent();
+            if (!current.supported) {
+              throw DeviceException(
+                DeviceError.unavailable,
+                '${current.unsupportedReason} Scene not applied.',
+              );
+            }
+            countdownSeconds(endsAt!);
+            if (current.active != null) {
+              final cancelled = await timers.cancelTimer(light.entityId);
+              requireCurrent();
+              if (!cancelled.supported || cancelled.active != null) {
+                throw timerUnconfirmed;
+              }
+              countdownSeconds(endsAt!);
+            }
+          }
+          commandAttempted = true;
           await backend.command(light, command);
+          applied = true;
+          requireCurrent();
           _revisions[light.entityId] = (_revisions[light.entityId] ?? 0) + 1;
           final revision = _revisions[light.entityId] ?? 0;
           final updated = await backend.getLight(light.entityId);
@@ -722,16 +783,52 @@ class AppController extends Notifier<AppState> {
               lights: {...state.lights, updated.entityId: updated},
             );
           }
+          if (needsTimer) {
+            requireCurrent();
+            if (!updated.available || !updated.isOn) {
+              throw const DeviceException(
+                DeviceError.unavailable,
+                'The light did not report being on. Turn-off timer was not set.',
+              );
+            }
+            final status = await (backend as LightTimersRepository).setTimer(
+              light.entityId,
+              endsAt!,
+              on: false,
+            );
+            final confirmed = status.active;
+            if (!status.supported ||
+                confirmed == null ||
+                confirmed.on ||
+                confirmed.endsAt.difference(endsAt!).inSeconds.abs() > 35) {
+              throw timerUnconfirmed;
+            }
+            timersConfirmed++;
+          }
           succeeded.add(slot.name);
         } catch (error) {
-          failed[slot.name] = userMessage(error);
+          failed[slot.name] =
+              turnOff != null &&
+                  command.service == 'turn_on' &&
+                  commandAttempted
+              ? applied
+                    ? 'Scene applied, but automatic turn-off was not confirmed. ${userMessage(error)} Check Timers before retrying.'
+                    : 'Scene change was not confirmed. Automatic turn-off was not set. ${userMessage(error)} Check this light before retrying.'
+              : userMessage(error);
         }
       }),
     );
     if (!_disposed && generation == _generation) {
       state = state.copyWith(busy: {});
     }
-    return ActionReport(succeeded: succeeded, failed: failed, skipped: skipped);
+    return ActionReport(
+      succeeded: succeeded,
+      failed: failed,
+      skipped: skipped,
+      successVerb: timersConfirmed == 0
+          ? 'updated'
+          : 'updated; $timersConfirmed turn-off ${timersConfirmed == 1 ? 'timer' : 'timers'} confirmed',
+    );
   }
 
   void setDemoAvailability(DeviceSlot slot, bool available) {

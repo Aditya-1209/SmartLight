@@ -4,6 +4,7 @@ import '../models/light_command.dart';
 import '../models/scene.dart';
 import '../app/theme.dart';
 import 'design_assets.dart';
+import 'scene_timing.dart';
 
 IconData sceneIcon(String id) => switch (id) {
   'study' => Icons.wb_sunny_outlined,
@@ -180,6 +181,25 @@ class SceneCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
                   ),
+                  if (scene.turnOff != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.timer_outlined, size: 14),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            sceneTurnOffLabel(context, scene.turnOff!),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
