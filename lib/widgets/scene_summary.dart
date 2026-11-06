@@ -5,6 +5,7 @@ import '../models/device_slot.dart';
 import 'common.dart';
 import 'design_assets.dart';
 import 'scene_card.dart';
+import 'scene_timing.dart';
 
 class SceneSummary extends StatelessWidget {
   const SceneSummary({
@@ -62,6 +63,20 @@ class SceneSummary extends StatelessWidget {
           ],
           if (scene.commands.isEmpty)
             const Text('Select a light to include it.'),
+          if (scene.turnOff != null) ...[
+            Row(
+              children: [
+                const Icon(Icons.timer_outlined, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(sceneTurnOffLabel(context, scene.turnOff!)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text('Set when you apply this scene.'),
+            const SizedBox(height: 16),
+          ],
           if (draft)
             const Text(
               'Saving won’t change your lights. Scenes are saved on this device.',

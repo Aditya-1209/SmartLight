@@ -122,6 +122,20 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        Card(
+          child: SwitchListTile(
+            key: const ValueKey('swap-preview-tubes'),
+            secondary: const Icon(Icons.swap_horiz),
+            title: const Text('Swap tubes in preview'),
+            subtitle: const Text(
+              'Use if the two tubes appear on opposite sides. This only changes the preview.',
+            ),
+            value: state.settings.swapPreviewTubes,
+            onChanged: (value) =>
+                runSetting(context, controller.setPreviewTubesSwapped(value)),
+          ),
+        ),
         const SizedBox(height: 24),
         const SectionCard(
           child: Column(
@@ -159,7 +173,7 @@ class SettingsScreen extends ConsumerWidget {
         const SizedBox(height: 16),
         const AboutListTile(
           applicationName: 'SmartLight',
-          applicationVersion: '2.6.1',
+          applicationVersion: '2.9.0',
           icon: Icon(Icons.info_outline),
         ),
       ],
