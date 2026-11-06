@@ -12,27 +12,34 @@ class AppSettings {
     this.demo = false,
     this.slots = DeviceSlot.defaults,
     this.customScenes = const [],
+    this.roomSceneIds,
   });
   final ThemeMode theme;
   final bool demo;
   final List<DeviceSlot> slots;
   final List<LightScene> customScenes;
+
+  /// Null keeps the existing first-four default; an empty list hides all.
+  final List<String>? roomSceneIds;
   AppSettings copyWith({
     ThemeMode? theme,
     bool? demo,
     List<DeviceSlot>? slots,
     List<LightScene>? customScenes,
+    List<String>? roomSceneIds,
   }) => AppSettings(
     theme: theme ?? this.theme,
     demo: demo ?? this.demo,
     slots: slots ?? this.slots,
     customScenes: customScenes ?? this.customScenes,
+    roomSceneIds: roomSceneIds ?? this.roomSceneIds,
   );
   Map<String, dynamic> toJson() => {
     'theme': theme.name,
     'demo': demo,
     'slots': slots.map((s) => s.toJson()).toList(),
     'customScenes': customScenes.map((s) => s.toJson()).toList(),
+    if (roomSceneIds != null) 'roomSceneIds': roomSceneIds,
   };
   factory AppSettings.fromJson(Map<String, dynamic> json) {
     final raw = json['slots'];
@@ -70,6 +77,21 @@ class AppSettings {
     }
     return AppSettings(
       customScenes: List.unmodifiable(scenes),
+      roomSceneIds: json['roomSceneIds'] is List
+          ? List.unmodifiable(
+              (json['roomSceneIds'] as List)
+                  .whereType<String>()
+                  .where(
+                    (id) =>
+                        LightScene.defaults.any((s) => s.id == id) ||
+                        RegExp(r'^custom-[a-zA-Z0-9-]{1,80}$').hasMatch(id),
+                  )
+                  .toSet()
+                  .take(
+                    LightScene.maxCustomScenes + LightScene.defaults.length,
+                  ),
+            )
+          : null,
       demo: json['demo'] == true,
       theme:
           ThemeMode.values.where((t) => t.name == json['theme']).firstOrNull ??

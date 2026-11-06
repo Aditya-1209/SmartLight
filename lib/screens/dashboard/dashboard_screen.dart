@@ -12,6 +12,7 @@ import '../../widgets/light_card.dart';
 import '../../widgets/scene_card.dart';
 import '../device_detail/device_detail_screen.dart';
 import '../timers/timers_screen.dart';
+import '../scenes/room_scenes_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key, required this.onSetup, this.onScenes});
@@ -37,31 +38,40 @@ class DashboardScreen extends ConsumerWidget {
         ? 0.0
         : dimmable.map((l) => l.brightnessPercent).reduce((a, b) => a + b) /
               dimmable.length;
-    Widget scenes(int count, int columns) => LayoutBuilder(
+    Widget scenes(int? count, int columns) => LayoutBuilder(
       builder: (context, constraints) => Wrap(
         spacing: 16,
         runSpacing: 16,
-        children: state.scenes
-            .take(count)
-            .map(
-              (scene) => SizedBox(
-                width: (constraints.maxWidth - (columns - 1) * 16) / columns,
-                child: SceneCard(
-                  scene: scene,
-                  onTap: enabled
-                      ? () => runAction(context, controller.applyScene(scene))
-                      : null,
-                ),
-              ),
-            )
-            .toList(),
+        children:
+            (count == null ? state.roomScenes : state.roomScenes.take(count))
+                .map(
+                  (scene) => SizedBox(
+                    width:
+                        (constraints.maxWidth - (columns - 1) * 16) / columns,
+                    child: SceneCard(
+                      scene: scene,
+                      onTap: enabled
+                          ? () =>
+                                runAction(context, controller.applyScene(scene))
+                          : null,
+                    ),
+                  ),
+                )
+                .toList(),
       ),
     );
-    Widget title(String label, String? action) => Row(
+    Widget title(String label) => Row(
       children: [
         Expanded(child: Text(label, style: theme.textTheme.titleLarge)),
-        if (action != null)
-          TextButton(onPressed: onScenes, child: Text(action)),
+        TextButton(
+          key: const ValueKey('edit-room-scenes'),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const RoomScenesScreen()),
+          ),
+          child: const Text('Edit'),
+        ),
+        if (onScenes != null)
+          TextButton(onPressed: onScenes, child: const Text('All scenes')),
       ],
     );
     Widget hero(bool wide) => Container(
@@ -346,12 +356,14 @@ class DashboardScreen extends ConsumerWidget {
               },
             ),
             const SizedBox(height: 24),
-            title(
-              wide ? 'A scene for every mood' : 'Set the mood',
-              'All scenes',
-            ),
+            title('Set the mood'),
             const SizedBox(height: 16),
-            scenes(4, constraints.maxWidth >= 650 ? 4 : 2),
+            if (state.roomScenes.isEmpty)
+              const Text(
+                'No scenes selected. Tap Edit to choose your favourites.',
+              )
+            else
+              scenes(null, constraints.maxWidth >= 650 ? 4 : 2),
           ],
         );
       },

@@ -16,6 +16,8 @@ SmartLight on phone / Mac / Windows
 The device running SmartLight is the controller. Connections and five-second polling stop in the background and resume when reopened. Everyday light controls run locally. Timers are stored on compatible lights and continue with SmartLight closed. Mac includes a setup-only Tuya Cloud/EZ pairing flow, and an optional personal Android build includes Tuya’s mobile SDK; this setup flow needs internet and closes its SDK connection when you leave it. No always-on server is required.
 
 - Responsive Material 3 dashboard, dark/light/system themes and per-light controls.
+- Swipe between My room, Scenes and Settings, with independent scroll positions and the existing navigation buttons.
+- Choose which presets and custom scenes appear under **My room → Set the mood → Edit**. Selections are saved on this device; hidden scenes remain on the Scenes page.
 - Room power, brightness, RGB presets/custom colors and Study/Movie/Chill/Sleep scenes.
 - Figma-based adaptive room overview, live light-card dimmers, scene previews and a three-tab interface for Android, Mac and Windows. Diagnostics are available in Settings.
 - Custom scenes with names, icons, per-light power/brightness/white/color, current-state capture, editing, duplication and undoable deletion. Saving does not send light commands.

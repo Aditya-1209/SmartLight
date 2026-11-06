@@ -78,6 +78,16 @@ class AppState {
     ...settings.customScenes,
     ...LightScene.defaults,
   ];
+  List<LightScene> get roomScenes {
+    final ids = settings.roomSceneIds;
+    if (ids == null) return scenes.take(4).toList();
+    final byId = {for (final scene in scenes) scene.id: scene};
+    return [
+      for (final id in ids)
+        if (byId[id] != null) byId[id]!,
+    ];
+  }
+
   AppState copyWith({
     AppSettings? settings,
     ConnectionConfig? config,
@@ -538,6 +548,25 @@ class AppController extends Notifier<AppState> {
     }
     await _saveScenes(scenes);
   });
+
+  Future<void> setRoomScenes(List<String> ids) => _configurationQueue.run(
+    () async {
+      await _ensureStorageReady();
+      final available = state.scenes.map((scene) => scene.id).toSet();
+      final settings = state.settings.copyWith(
+        roomSceneIds: List.unmodifiable(ids.where(available.contains).toSet()),
+      );
+      try {
+        await ref.read(settingsStoreProvider).write(settings);
+      } catch (_) {
+        throw const DeviceException(
+          DeviceError.storage,
+          'Could not save your room scenes. Please try again.',
+        );
+      }
+      if (!_disposed) state = state.copyWith(settings: settings);
+    },
+  );
 
   Future<void> deleteScene(String id) => _configurationQueue.run(() async {
     await _ensureStorageReady();

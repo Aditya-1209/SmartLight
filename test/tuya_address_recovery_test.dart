@@ -244,6 +244,38 @@ void main() {
   });
 
   test(
+    'unsuccessful discovery retains handshake and status timeout stages',
+    () async {
+      for (final stage in [
+        TuyaConnectionStage.handshake,
+        TuyaConnectionStage.status,
+      ]) {
+        for (final found in <List<TuyaDiscoveredLight>>[
+          [],
+          [hint(host: oldHost)],
+          [hint(), hint(host: '192.168.1.222')],
+        ]) {
+          final original = TuyaTimeoutException(stage);
+          final events = <ResolvedConnection>[];
+          final client = AutoTuyaClient(
+            tube(),
+            factory: (c) => FakeTube(c, readError: original),
+            discover: () async => found,
+            onResolved: events.add,
+          );
+          try {
+            await expectLater(client.read(), throwsA(same(original)));
+            expect(events, isEmpty);
+            expect(client.config.host, oldHost);
+          } finally {
+            client.dispose();
+          }
+        }
+      }
+    },
+  );
+
+  test(
     'uncertain writes are never replayed or followed by rediscovery',
     () async {
       var scans = 0;
