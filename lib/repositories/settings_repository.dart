@@ -13,6 +13,7 @@ class AppSettings {
     this.slots = DeviceSlot.defaults,
     this.customScenes = const [],
     this.roomSceneIds,
+    this.swapPreviewTubes = false,
   });
   final ThemeMode theme;
   final bool demo;
@@ -21,18 +22,21 @@ class AppSettings {
 
   /// Null keeps the existing first-four default; an empty list hides all.
   final List<String>? roomSceneIds;
+  final bool swapPreviewTubes;
   AppSettings copyWith({
     ThemeMode? theme,
     bool? demo,
     List<DeviceSlot>? slots,
     List<LightScene>? customScenes,
     List<String>? roomSceneIds,
+    bool? swapPreviewTubes,
   }) => AppSettings(
     theme: theme ?? this.theme,
     demo: demo ?? this.demo,
     slots: slots ?? this.slots,
     customScenes: customScenes ?? this.customScenes,
     roomSceneIds: roomSceneIds ?? this.roomSceneIds,
+    swapPreviewTubes: swapPreviewTubes ?? this.swapPreviewTubes,
   );
   Map<String, dynamic> toJson() => {
     'theme': theme.name,
@@ -40,6 +44,7 @@ class AppSettings {
     'slots': slots.map((s) => s.toJson()).toList(),
     'customScenes': customScenes.map((s) => s.toJson()).toList(),
     if (roomSceneIds != null) 'roomSceneIds': roomSceneIds,
+    'swapPreviewTubes': swapPreviewTubes,
   };
   factory AppSettings.fromJson(Map<String, dynamic> json) {
     final raw = json['slots'];
@@ -77,6 +82,7 @@ class AppSettings {
     }
     return AppSettings(
       customScenes: List.unmodifiable(scenes),
+      swapPreviewTubes: json['swapPreviewTubes'] == true,
       roomSceneIds: json['roomSceneIds'] is List
           ? List.unmodifiable(
               (json['roomSceneIds'] as List)

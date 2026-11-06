@@ -1,3 +1,9 @@
+## 2026-11-06 — SmartLight 2.8.0 live room lighting
+
+- Added a runtime light compositor driven by each room slot's reported state. Tube sources and concealed left/right strip edges are independent; RGB respects the active colour mode, white temperature uses a visual warm/cool approximation, and diffuse surface lighting/emitter bloom scale with brightness. Off, unavailable and black RGB sources emit no light. Updates animate for 280 ms and use existing state polling/control results; the preview sends no light commands or cloud requests.
+- Optional private neutral base imagery remains git-ignored, including reference variants and prompts. Public builds use a procedural fallback with the same light positions. The Windows local-file path remains supported. Added a persisted, serialized **Swap tubes in preview** preference; it affects only preview mapping and preserves connection/scene data.
+- All **162 tests passed**, static analysis is clean, and formatting passed. New tests check rendered pixels for independent red/blue tubes and green side glows, monotonic lamp/surface dimming, off/black emission, active RGB/white modes, reported-state updates after controls/scenes, and position swapping without changing physical device mapping. Private visual galleries cover off, warm white, mixed RGB, strip-only and dim states. Native package/install results are recorded after completion.
+
 ## 2026-11-06 — SmartLight 2.7.1 photo-based room preview
 
 - Added an optional private room-render asset at an ignored path. The image and its generation prompt stay local, as requested; the raw reference photo is not included in source control. Local packages bundle the personal image. Shared builds retain the generic vector fallback; Windows can load a private `room-render.png` placed beside its executable. An absent/unreadable personal image falls back without changing room controls.

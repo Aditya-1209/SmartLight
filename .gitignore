@@ -76,4 +76,4 @@ tuya-raw.json
 
 # Optional personal room image and its generation prompt stay local.
 /assets/design/room-render.png
-/output/imagegen/room-render-prompt.txt
+/output/imagegen/

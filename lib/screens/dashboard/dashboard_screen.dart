@@ -24,10 +24,10 @@ class DashboardScreen extends ConsumerWidget {
     final state = ref.watch(appControllerProvider);
     final controller = ref.read(appControllerProvider.notifier);
     final theme = Theme.of(context), scheme = theme.colorScheme;
-    final mapped = state.slots
-        .map(state.lightFor)
-        .whereType<LightEntity>()
-        .toList();
+    final bySlot = {
+      for (final slot in state.slots) slot.id: state.lightFor(slot),
+    };
+    final mapped = bySlot.values.whereType<LightEntity>().toList();
     final onCount = mapped.where((l) => l.available && l.isOn).length;
     final connected = mapped.where((l) => l.available).length;
     final enabled = state.configured && state.busy.isEmpty && state.connected;
@@ -123,7 +123,12 @@ class DashboardScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 12),
-          RoomIllustration(height: wide ? 260 : 200),
+          RoomIllustration(
+            height: wide ? 260 : 200,
+            tube1: bySlot[state.settings.swapPreviewTubes ? 'tube2' : 'tube1'],
+            tube2: bySlot[state.settings.swapPreviewTubes ? 'tube1' : 'tube2'],
+            strip: bySlot['strip'],
+          ),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

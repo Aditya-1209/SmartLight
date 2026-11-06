@@ -6,7 +6,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:smart_light/app/app.dart';
 import 'package:smart_light/models/light_command.dart';
 import 'package:smart_light/models/scene.dart';
@@ -54,7 +53,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byType(SvgPicture), findsOneWidget);
+    final preview = tester.widget<CustomPaint>(
+      find.byKey(const ValueKey('live-room-preview')),
+    );
+    expect((preview.painter! as RoomLightingPainter).image, isNull);
     expect(tester.takeException(), isNull);
   });
 

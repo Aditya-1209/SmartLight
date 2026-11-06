@@ -530,6 +530,14 @@ class AppController extends Notifier<AppState> {
     if (!_disposed) state = state.copyWith(settings: settings);
   });
 
+  Future<void> setPreviewTubesSwapped(bool swap) =>
+      _configurationQueue.run(() async {
+        await _ensureStorageReady();
+        final settings = state.settings.copyWith(swapPreviewTubes: swap);
+        await ref.read(settingsStoreProvider).write(settings);
+        if (!_disposed) state = state.copyWith(settings: settings);
+      });
+
   Future<void> saveScene(LightScene scene) => _configurationQueue.run(() async {
     await _ensureStorageReady();
     final validated = LightScene.fromJson(scene.toJson());
