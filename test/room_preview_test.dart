@@ -8,6 +8,7 @@ import 'package:smart_light/app/app.dart';
 import 'package:smart_light/models/light_command.dart';
 import 'package:smart_light/models/light_entity.dart';
 import 'package:smart_light/providers/app_controller.dart';
+import 'package:smart_light/repositories/settings_repository.dart';
 import 'package:smart_light/widgets/room_preview.dart';
 
 import 'support.dart';
@@ -141,7 +142,11 @@ void main() {
   testWidgets(
     'dashboard preview follows individual commands and scenes without sending extra commands',
     (tester) async {
-      final container = testContainer();
+      final container = testContainer(
+        settings: MemorySettings(
+          const AppSettings(demo: true, genericRoomPreview: false),
+        ),
+      );
       addTearDown(container.dispose);
       await tester.runAsync(
         () => container.read(appControllerProvider.notifier).initialize(),

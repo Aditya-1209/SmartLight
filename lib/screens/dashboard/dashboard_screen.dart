@@ -124,6 +124,7 @@ class DashboardScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           RoomIllustration(
+            generic: state.settings.genericRoomPreview,
             height: wide ? 260 : 200,
             tube1: bySlot[state.settings.swapPreviewTubes ? 'tube2' : 'tube1'],
             tube2: bySlot[state.settings.swapPreviewTubes ? 'tube1' : 'tube2'],

@@ -33,6 +33,8 @@ The device running SmartLight is the controller. Connections and five-second pol
 - Capabilities derived from device state; unsupported controls are hidden.
 - Separate failures for each light, foreground polling, manual refresh and diagnostics.
 - Demo mode with three simulated lights and outage controls; saved credentials remain separate.
+- Delete room cards (including unused starter cards) in Settings → Connected lights, then add named replacements. An empty room stays empty after restart; up to three lights are supported. Deleting a card removes this installation’s connection without resetting or unbinding the physical light, changing other devices, or cancelling a timer already stored on it.
+- New installations use the original generic room illustration. Settings → Generic room preview lets existing users switch without replacing their personal render or connections.
 
 ## Direct protocol support
 

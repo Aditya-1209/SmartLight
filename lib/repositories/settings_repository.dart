@@ -14,6 +14,7 @@ class AppSettings {
     this.customScenes = const [],
     this.roomSceneIds,
     this.swapPreviewTubes = false,
+    this.genericRoomPreview = true,
   });
   final ThemeMode theme;
   final bool demo;
@@ -23,6 +24,7 @@ class AppSettings {
   /// Null keeps the existing first-four default; an empty list hides all.
   final List<String>? roomSceneIds;
   final bool swapPreviewTubes;
+  final bool genericRoomPreview;
   AppSettings copyWith({
     ThemeMode? theme,
     bool? demo,
@@ -30,6 +32,7 @@ class AppSettings {
     List<LightScene>? customScenes,
     List<String>? roomSceneIds,
     bool? swapPreviewTubes,
+    bool? genericRoomPreview,
   }) => AppSettings(
     theme: theme ?? this.theme,
     demo: demo ?? this.demo,
@@ -37,6 +40,7 @@ class AppSettings {
     customScenes: customScenes ?? this.customScenes,
     roomSceneIds: roomSceneIds ?? this.roomSceneIds,
     swapPreviewTubes: swapPreviewTubes ?? this.swapPreviewTubes,
+    genericRoomPreview: genericRoomPreview ?? this.genericRoomPreview,
   );
   Map<String, dynamic> toJson() => {
     'theme': theme.name,
@@ -45,10 +49,20 @@ class AppSettings {
     'customScenes': customScenes.map((s) => s.toJson()).toList(),
     if (roomSceneIds != null) 'roomSceneIds': roomSceneIds,
     'swapPreviewTubes': swapPreviewTubes,
+    'genericRoomPreview': genericRoomPreview,
   };
   factory AppSettings.fromJson(Map<String, dynamic> json) {
     final raw = json['slots'];
-    final slots = DeviceSlot.defaults.map((slot) {
+    final ids = raw is List
+        ? raw
+              .whereType<Map>()
+              .map((item) => item['id'])
+              .whereType<String>()
+              .where((id) => DeviceSlot.defaults.any((s) => s.id == id))
+              .toSet()
+        : DeviceSlot.defaults.map((s) => s.id);
+    final slots = ids.map((id) {
+      final slot = DeviceSlot.defaults.singleWhere((s) => s.id == id);
       final matches = raw is List
           ? raw.whereType<Map>().where((s) => s['id'] == slot.id)
           : <Map>[];
@@ -83,6 +97,9 @@ class AppSettings {
     return AppSettings(
       customScenes: List.unmodifiable(scenes),
       swapPreviewTubes: json['swapPreviewTubes'] == true,
+      // Keep the personal preview for existing installations; new installs
+      // use the original generic illustration unless explicitly changed.
+      genericRoomPreview: json['genericRoomPreview'] == true,
       roomSceneIds: json['roomSceneIds'] is List
           ? List.unmodifiable(
               (json['roomSceneIds'] as List)

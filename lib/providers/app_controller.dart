@@ -61,18 +61,18 @@ class AppState {
   final DateTime? lastRefresh;
   final String? error;
   bool get configured => settings.demo || (config?.devices.isNotEmpty ?? false);
-  List<DeviceSlot> get slots => settings.demo
-      ? DeviceSlot.demo
-      : DeviceSlot.defaults.map((slot) {
-          final device = config?.devices
-              .where((d) => d.slotId == slot.id)
-              .firstOrNull;
-          return DeviceSlot(
-            id: slot.id,
-            name: device?.name ?? slot.name,
-            entityId: device?.entityId,
-          );
-        }).toList();
+  List<DeviceSlot> get slots =>
+      settings.demo ? DeviceSlot.demo : configuredSlots;
+  List<DeviceSlot> get configuredSlots => settings.slots.map((slot) {
+    final device = config?.devices
+        .where((d) => d.slotId == slot.id)
+        .firstOrNull;
+    return DeviceSlot(
+      id: slot.id,
+      name: device?.name ?? slot.name,
+      entityId: device?.entityId,
+    );
+  }).toList();
   LightEntity? lightFor(DeviceSlot slot) => lights[slot.entityId];
   List<LightScene> get scenes => [
     ...settings.customScenes,
@@ -468,11 +468,74 @@ class AppController extends Notifier<AppState> {
     await _saveConfig(config);
   }
 
-  Future<void> _saveConfig(ConnectionConfig config) async {
-    final settings = state.settings.copyWith(demo: false);
+  /// Removes the room card as well as its saved connection, without contacting
+  /// or resetting the physical light. removeDevice remains disconnect-only.
+  Future<void> deleteLight(String slotId) => _configurationQueue.run(() async {
+    await _ensureStorageReady();
+    if (!state.settings.slots.any((s) => s.id == slotId)) return;
+    final config = ConnectionConfig([
+      ...?state.config?.devices.where((d) => d.slotId != slotId),
+    ]);
+    await _saveConfig(
+      config,
+      settings: state.settings.copyWith(
+        slots: state.settings.slots.where((s) => s.id != slotId).toList(),
+      ),
+    );
+  });
+
+  Future<void> addLight(String name) => _configurationQueue.run(() async {
+    await _ensureStorageReady();
+    final slot = DeviceSlot.defaults
+        .where(
+          (candidate) =>
+              !state.settings.slots.any((s) => s.id == candidate.id) &&
+              !(state.config?.devices.any((d) => d.slotId == candidate.id) ??
+                  false),
+        )
+        .firstOrNull;
+    if (slot == null || name.trim().isEmpty || name.trim().length > 80) {
+      throw const DeviceException(
+        DeviceError.storage,
+        'Give your light a name (up to 80 characters). This room supports up to three lights.',
+      );
+    }
+    final settings = state.settings.copyWith(
+      demo: false,
+      slots: [
+        ...state.settings.slots,
+        DeviceSlot(id: slot.id, name: name.trim()),
+      ],
+    );
+    await ref.read(settingsStoreProvider).write(settings);
+    if (_disposed) return;
+    state = state.copyWith(settings: settings);
+    await _attach();
+  });
+
+  Future<void> _saveConfig(
+    ConnectionConfig config, {
+    AppSettings? settings,
+  }) async {
+    final previousConfig = state.config ?? ConnectionConfig([]);
+    settings = (settings ?? state.settings).copyWith(demo: false);
+    // An explicit setup import may bring back a previously deleted room card.
+    settings = settings.copyWith(
+      slots: [
+        ...settings.slots,
+        for (final device in config.devices)
+          if (!settings.slots.any((s) => s.id == device.slotId))
+            DeviceSlot(id: device.slotId, name: device.name),
+      ],
+    );
     try {
       await ref.read(credentialStoreProvider).write(config);
-      await ref.read(settingsStoreProvider).write(settings);
+      try {
+        await ref.read(settingsStoreProvider).write(settings);
+      } catch (_) {
+        await ref.read(credentialStoreProvider).write(previousConfig);
+        rethrow;
+      }
     } catch (_) {
       throw const DeviceException(
         DeviceError.storage,
@@ -534,6 +597,14 @@ class AppController extends Notifier<AppState> {
       _configurationQueue.run(() async {
         await _ensureStorageReady();
         final settings = state.settings.copyWith(swapPreviewTubes: swap);
+        await ref.read(settingsStoreProvider).write(settings);
+        if (!_disposed) state = state.copyWith(settings: settings);
+      });
+
+  Future<void> setGenericRoomPreview(bool generic) =>
+      _configurationQueue.run(() async {
+        await _ensureStorageReady();
+        final settings = state.settings.copyWith(genericRoomPreview: generic);
         await ref.read(settingsStoreProvider).write(settings);
         if (!_disposed) state = state.copyWith(settings: settings);
       });

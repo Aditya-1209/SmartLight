@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../models/light_entity.dart';
 
@@ -90,11 +91,13 @@ class RoomIllustration extends StatefulWidget {
     this.tube2,
     this.strip,
     this.imageProvider,
+    this.generic = false,
     super.key,
   });
   final double height;
   final LightEntity? tube1, tube2, strip;
   final ImageProvider? imageProvider;
+  final bool generic;
   @override
   State<RoomIllustration> createState() => _RoomIllustrationState();
 }
@@ -118,6 +121,15 @@ class _RoomIllustrationState extends State<RoomIllustration> {
   }
 
   void _load() {
+    if (widget.generic) {
+      if (_listener != null) _stream?.removeListener(_listener!);
+      _listener = null;
+      _stream = null;
+      _source = null;
+      _image?.dispose();
+      _image = null;
+      return;
+    }
     final bundled = AssetImage(
       'assets/design/room-render.png',
       bundle: DefaultAssetBundle.of(context),
@@ -181,6 +193,14 @@ class _RoomIllustrationState extends State<RoomIllustration> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.generic) {
+      return SvgPicture.asset(
+        'assets/design/room-illustration.svg',
+        height: widget.height,
+        width: double.infinity,
+        semanticsLabel: 'Generic room illustration',
+      );
+    }
     final lighting = RoomLighting(
       tube1: RoomLightStyle.fromLight(widget.tube1),
       tube2: RoomLightStyle.fromLight(widget.tube2),

@@ -1,3 +1,9 @@
+## 2026-11-07 — SmartLight 2.9.1 independent room setup
+
+- Added explicit room-card deletion, including unconfigured starter cards, with local-only confirmation and an empty-room state. Add a light creates a named replacement in an available slot (up to three). Explicit empty/partial room lists persist instead of resurrecting defaults. Setup imports restore missing cards for explicitly imported connections. Deleting a card does not contact/reset/unbind a light or cancel its native timers. Demo cards remain separate. Credential storage is restored to the previous config if a preference write fails during a config change.
+- New installations use the original generic vector illustration. An appearance preference allows switching between generic and personal previews; older saved preferences retain the personal preview. The generic widget bypasses personal image loading. The APK intended for the other user is packaged without the private room-render asset; no connection transfer is performed.
+- All **180 tests passed**; new checks cover preference migration/empty lists, deletion/restart, named replacement/import, storage failure rollback, confirmation/cancel, empty-state layouts at 360×800 and 1280×900, and generic rendering. Native package/install results are recorded after completion.
+
 ## 2026-11-06 — SmartLight 2.9.0 saved scene turn-off rules
 
 - Added optional validated delay/clock recipes to custom scenes. Older scene JSON stays untimed, and scene commands, preferences, room selections, private preview data and connection credentials retain their formats. Editing/copying preserves timing; selecting None removes it. Scene cards and summaries display the rule. The editor footer wraps on narrow displays.
