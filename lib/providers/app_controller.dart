@@ -38,6 +38,9 @@ final backendFactoryProvider = Provider<BackendFactory>(
 final appControllerProvider = NotifierProvider<AppController, AppState>(
   AppController.new,
 );
+final timerSetupGraceProvider = Provider<Duration>(
+  (ref) => const Duration(seconds: 30),
+);
 
 class AppState {
   const AppState({
@@ -50,6 +53,7 @@ class AppState {
     this.realtime = ConnectionStatus.disconnected,
     this.lastRefresh,
     this.error,
+    this.timerWarning,
   });
   final AppSettings settings;
   final ConnectionConfig? config;
@@ -60,24 +64,38 @@ class AppState {
   final ConnectionStatus realtime;
   final DateTime? lastRefresh;
   final String? error;
+  final String? timerWarning;
   bool get configured => settings.demo || (config?.devices.isNotEmpty ?? false);
-  List<DeviceSlot> get slots => settings.demo
-      ? DeviceSlot.demo
-      : DeviceSlot.defaults.map((slot) {
-          final device = config?.devices
-              .where((d) => d.slotId == slot.id)
-              .firstOrNull;
-          return DeviceSlot(
-            id: slot.id,
-            name: device?.name ?? slot.name,
-            entityId: device?.entityId,
-          );
-        }).toList();
+  List<DeviceSlot> get slots =>
+      settings.demo ? DeviceSlot.demo : configuredSlots;
+  List<DeviceSlot> get configuredSlots => settings.slots.map((slot) {
+    final device = config?.devices
+        .where((d) => d.slotId == slot.id)
+        .firstOrNull;
+    return DeviceSlot(
+      id: slot.id,
+      name: device?.name ?? slot.name,
+      entityId: device?.entityId,
+    );
+  }).toList();
   LightEntity? lightFor(DeviceSlot slot) => lights[slot.entityId];
-  List<LightScene> get scenes => [
-    ...settings.customScenes,
-    ...LightScene.defaults,
+  List<LightScene> get scenes => [...settings.customScenes, ...presetScenes];
+  List<LightScene> get presetScenes => [
+    for (final original in LightScene.defaults)
+      if (!settings.deletedPresetIds.contains(original.id))
+        settings.presetScenes.where((s) => s.id == original.id).firstOrNull ??
+            original,
   ];
+  List<LightScene> get roomScenes {
+    final ids = settings.roomSceneIds;
+    if (ids == null) return scenes.take(4).toList();
+    final byId = {for (final scene in scenes) scene.id: scene};
+    return [
+      for (final id in ids)
+        if (byId[id] != null) byId[id]!,
+    ];
+  }
+
   AppState copyWith({
     AppSettings? settings,
     ConnectionConfig? config,
@@ -89,6 +107,8 @@ class AppState {
     DateTime? lastRefresh,
     String? error,
     bool clearError = false,
+    String? timerWarning,
+    bool clearTimerWarning = false,
   }) => AppState(
     settings: settings ?? this.settings,
     config: config ?? this.config,
@@ -99,6 +119,7 @@ class AppState {
     realtime: realtime ?? this.realtime,
     lastRefresh: lastRefresh ?? this.lastRefresh,
     error: clearError ? null : error ?? this.error,
+    timerWarning: clearTimerWarning ? null : timerWarning ?? this.timerWarning,
   );
 }
 
@@ -130,6 +151,8 @@ class AppController extends Notifier<AppState> {
   int _generation = 0;
   bool _disposed = false;
   bool _foreground = true;
+  int _pendingTimerSetups = 0;
+  Timer? _backgroundDisconnect;
   Future<void>? _initialization;
   bool _storageReady = false;
   final Map<String, int> _revisions = {};
@@ -180,6 +203,8 @@ class AppController extends Notifier<AppState> {
 
   void _detach() {
     ++_generation;
+    _backgroundDisconnect?.cancel();
+    _backgroundDisconnect = null;
     _fallbackRefresh?.cancel();
     unawaited(_updates?.cancel());
     unawaited(_statuses?.cancel());
@@ -257,6 +282,7 @@ class AppController extends Notifier<AppState> {
       settings: state.settings,
       config: state.config,
       loading: true,
+      timerWarning: state.timerWarning,
     );
     _updates = backend.updates.listen((light) {
       if (_disposed || generation != _generation) return;
@@ -273,10 +299,15 @@ class AppController extends Notifier<AppState> {
       );
     });
     backend.start();
-    _fallbackRefresh = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (state.busy.isEmpty) unawaited(refresh());
-    });
+    _startRefresh();
     await refresh(force: true);
+  }
+
+  void _startRefresh() {
+    _fallbackRefresh?.cancel();
+    _fallbackRefresh = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (_foreground && state.busy.isEmpty) unawaited(refresh());
+    });
   }
 
   Future<void> refresh({bool force = false}) async {
@@ -458,11 +489,74 @@ class AppController extends Notifier<AppState> {
     await _saveConfig(config);
   }
 
-  Future<void> _saveConfig(ConnectionConfig config) async {
-    final settings = state.settings.copyWith(demo: false);
+  /// Removes the room card as well as its saved connection, without contacting
+  /// or resetting the physical light. removeDevice remains disconnect-only.
+  Future<void> deleteLight(String slotId) => _configurationQueue.run(() async {
+    await _ensureStorageReady();
+    if (!state.settings.slots.any((s) => s.id == slotId)) return;
+    final config = ConnectionConfig([
+      ...?state.config?.devices.where((d) => d.slotId != slotId),
+    ]);
+    await _saveConfig(
+      config,
+      settings: state.settings.copyWith(
+        slots: state.settings.slots.where((s) => s.id != slotId).toList(),
+      ),
+    );
+  });
+
+  Future<void> addLight(String name) => _configurationQueue.run(() async {
+    await _ensureStorageReady();
+    final slot = DeviceSlot.defaults
+        .where(
+          (candidate) =>
+              !state.settings.slots.any((s) => s.id == candidate.id) &&
+              !(state.config?.devices.any((d) => d.slotId == candidate.id) ??
+                  false),
+        )
+        .firstOrNull;
+    if (slot == null || name.trim().isEmpty || name.trim().length > 80) {
+      throw const DeviceException(
+        DeviceError.storage,
+        'Give your light a name (up to 80 characters). This room supports up to three lights.',
+      );
+    }
+    final settings = state.settings.copyWith(
+      demo: false,
+      slots: [
+        ...state.settings.slots,
+        DeviceSlot(id: slot.id, name: name.trim()),
+      ],
+    );
+    await ref.read(settingsStoreProvider).write(settings);
+    if (_disposed) return;
+    state = state.copyWith(settings: settings);
+    await _attach();
+  });
+
+  Future<void> _saveConfig(
+    ConnectionConfig config, {
+    AppSettings? settings,
+  }) async {
+    final previousConfig = state.config ?? ConnectionConfig([]);
+    settings = (settings ?? state.settings).copyWith(demo: false);
+    // An explicit setup import may bring back a previously deleted room card.
+    settings = settings.copyWith(
+      slots: [
+        ...settings.slots,
+        for (final device in config.devices)
+          if (!settings.slots.any((s) => s.id == device.slotId))
+            DeviceSlot(id: device.slotId, name: device.name),
+      ],
+    );
     try {
       await ref.read(credentialStoreProvider).write(config);
-      await ref.read(settingsStoreProvider).write(settings);
+      try {
+        await ref.read(settingsStoreProvider).write(settings);
+      } catch (_) {
+        await ref.read(credentialStoreProvider).write(previousConfig);
+        rethrow;
+      }
     } catch (_) {
       throw const DeviceException(
         DeviceError.storage,
@@ -492,15 +586,66 @@ class AppController extends Notifier<AppState> {
     if (_disposed) return;
     _foreground = foreground;
     if (foreground) {
-      if (_backend == null && state.configured) await _attach();
+      _backgroundDisconnect?.cancel();
+      _backgroundDisconnect = null;
+      if (_backend == null && state.configured) {
+        await _attach();
+      } else if (_backend != null) {
+        _startRefresh();
+      }
     } else {
-      _detach();
-      state = state.copyWith(
-        loading: false,
-        connected: false,
-        busy: {},
-        realtime: ConnectionStatus.disconnected,
-      );
+      _fallbackRefresh?.cancel();
+      if (_pendingTimerSetups > 0 && _backend != null) {
+        // Finish the already-requested native countdown before releasing its
+        // socket. Hidden/paused events often arrive as soon as Sleep is tapped.
+        // This is a bounded handoff, never an app-side 15-minute alarm.
+        _backgroundDisconnect ??= Timer(ref.read(timerSetupGraceProvider), () {
+          if (_disposed || _foreground) return;
+          state = state.copyWith(
+            timerWarning: 'Timer setup was interrupted before it could be confirmed. Check Timers & schedules before relying on automatic turn-off.',
+          );
+          _suspendConnections();
+        });
+      } else {
+        _suspendConnections();
+      }
+    }
+  }
+
+  void _suspendConnections() {
+    _detach();
+    state = state.copyWith(
+      loading: false,
+      connected: false,
+      busy: {},
+      realtime: ConnectionStatus.disconnected,
+    );
+  }
+
+  void dismissTimerWarning() {
+    state = state.copyWith(clearTimerWarning: true);
+  }
+
+  Future<ActionReport> _finishTimerSetup(
+    Future<ActionReport> Function() action,
+  ) async {
+    _pendingTimerSetups++;
+    try {
+      final report = await action();
+      if (!_disposed) {
+        state = state.copyWith(
+          timerWarning: report.hasFailures
+              ? 'Timer setup needs attention: ${report.message}'
+              : null,
+          clearTimerWarning: !report.hasFailures,
+        );
+      }
+      return report;
+    } finally {
+      _pendingTimerSetups--;
+      if (!_disposed && !_foreground && _pendingTimerSetups == 0) {
+        _suspendConnections();
+      }
     }
   }
 
@@ -520,9 +665,39 @@ class AppController extends Notifier<AppState> {
     if (!_disposed) state = state.copyWith(settings: settings);
   });
 
+  Future<void> setPreviewTubesSwapped(bool swap) =>
+      _configurationQueue.run(() async {
+        await _ensureStorageReady();
+        final settings = state.settings.copyWith(swapPreviewTubes: swap);
+        await ref.read(settingsStoreProvider).write(settings);
+        if (!_disposed) state = state.copyWith(settings: settings);
+      });
+
+  Future<void> setGenericRoomPreview(bool generic) =>
+      _configurationQueue.run(() async {
+        await _ensureStorageReady();
+        final settings = state.settings.copyWith(genericRoomPreview: generic);
+        await ref.read(settingsStoreProvider).write(settings);
+        if (!_disposed) state = state.copyWith(settings: settings);
+      });
+
   Future<void> saveScene(LightScene scene) => _configurationQueue.run(() async {
     await _ensureStorageReady();
     final validated = LightScene.fromJson(scene.toJson());
+    if (!validated.isCustom) {
+      await _writeSceneSettings(
+        state.settings.copyWith(
+          presetScenes: List.unmodifiable([
+            ...state.settings.presetScenes.where((s) => s.id != validated.id),
+            validated,
+          ]),
+          deletedPresetIds: state.settings.deletedPresetIds
+              .where((id) => id != validated.id)
+              .toList(),
+        ),
+      );
+      return;
+    }
     final scenes = [...state.settings.customScenes];
     final index = scenes.indexWhere((s) => s.id == validated.id);
     if (index < 0) {
@@ -539,17 +714,53 @@ class AppController extends Notifier<AppState> {
     await _saveScenes(scenes);
   });
 
+  Future<void> setRoomScenes(List<String> ids) => _configurationQueue.run(
+    () async {
+      await _ensureStorageReady();
+      final available = state.scenes.map((scene) => scene.id).toSet();
+      final settings = state.settings.copyWith(
+        roomSceneIds: List.unmodifiable(ids.where(available.contains).toSet()),
+      );
+      try {
+        await ref.read(settingsStoreProvider).write(settings);
+      } catch (_) {
+        throw const DeviceException(
+          DeviceError.storage,
+          'Could not save your room scenes. Please try again.',
+        );
+      }
+      if (!_disposed) state = state.copyWith(settings: settings);
+    },
+  );
+
   Future<void> deleteScene(String id) => _configurationQueue.run(() async {
     await _ensureStorageReady();
+    if (LightScene.presetIds.contains(id)) {
+      await _writeSceneSettings(
+        state.settings.copyWith(
+          deletedPresetIds: List.unmodifiable({
+            ...state.settings.deletedPresetIds,
+            id,
+          }),
+        ),
+      );
+      return;
+    }
     await _saveScenes(
       state.settings.customScenes.where((s) => s.id != id).toList(),
     );
   });
 
-  Future<void> _saveScenes(List<LightScene> scenes) async {
-    final settings = state.settings.copyWith(
-      customScenes: List.unmodifiable(scenes),
-    );
+  Future<void> restoreDeletedPresets() => _configurationQueue.run(() async {
+    await _ensureStorageReady();
+    await _writeSceneSettings(state.settings.copyWith(deletedPresetIds: []));
+  });
+
+  Future<void> _saveScenes(List<LightScene> scenes) => _writeSceneSettings(
+    state.settings.copyWith(customScenes: List.unmodifiable(scenes)),
+  );
+
+  Future<void> _writeSceneSettings(AppSettings settings) async {
     try {
       await ref.read(settingsStoreProvider).write(settings);
     } catch (_) {
@@ -565,7 +776,9 @@ class AppController extends Notifier<AppState> {
       _run({slot.id: command});
   Future<ActionReport> controlAll(LightCommand command) =>
       _run({for (final s in state.slots) s.id: command}, skipUnsupported: true);
-  Future<ActionReport> applyScene(LightScene scene) => _run(scene.commands);
+  Future<ActionReport> applyScene(LightScene scene) => scene.turnOff == null
+      ? _run(scene.commands)
+      : _finishTimerSetup(() => _run(scene.commands, turnOff: scene.turnOff));
 
   Future<LightTimerStatus> readTimer(String slotId) async {
     final backend = _backend;
@@ -583,9 +796,10 @@ class AppController extends Notifier<AppState> {
     Set<String> slotIds,
     DateTime endsAt, {
     required bool on,
-  }) => _runTimers(slotIds, endsAt: endsAt, on: on);
+  }) => _finishTimerSetup(() => _runTimers(slotIds, endsAt: endsAt, on: on));
 
-  Future<ActionReport> cancelLightTimer(String slotId) => _runTimers({slotId});
+  Future<ActionReport> cancelLightTimer(String slotId) =>
+      _finishTimerSetup(() => _runTimers({slotId}));
 
   Future<ActionReport> _runTimers(
     Set<String> slotIds, {
@@ -640,10 +854,30 @@ class AppController extends Notifier<AppState> {
   Future<ActionReport> _run(
     Map<String, LightCommand> commands, {
     bool skipUnsupported = false,
+    SceneOffSchedule? turnOff,
   }) async {
     final succeeded = <String>[];
     final failed = <String, String>{};
     final skipped = <String>[];
+    var timersConfirmed = 0;
+    DateTime? endsAt;
+    if (turnOff != null) {
+      try {
+        final validated = SceneOffSchedule.fromJson(turnOff.toJson());
+        endsAt = validated.resolve(DateTime.now());
+        countdownSeconds(endsAt);
+      } catch (error) {
+        return ActionReport(
+          succeeded: [],
+          failed: {
+            'Scene': error is FormatException
+                ? 'Choose a valid scene turn-off time.'
+                : userMessage(error),
+          },
+          skipped: [],
+        );
+      }
+    }
     final backend = _backend;
     final generation = _generation;
     final targets = state.slots
@@ -673,8 +907,48 @@ class AppController extends Notifier<AppState> {
           skipped.add(slot.name);
           return;
         }
+        var applied = false, commandAttempted = false;
         try {
+          void requireCurrent() {
+            if (_disposed || generation != _generation) {
+              throw const DeviceException(
+                DeviceError.unavailable,
+                'Scene setup was interrupted. Check the light and its timer before trying again.',
+              );
+            }
+          }
+
+          final needsTimer = endsAt != null && command.service == 'turn_on';
+          if (needsTimer) {
+            if (backend is! LightTimersRepository) {
+              throw const DeviceException(
+                DeviceError.unavailable,
+                'This light does not support built-in turn-off timers. Scene not applied.',
+              );
+            }
+            final timers = backend as LightTimersRepository;
+            final current = await timers.readTimer(light.entityId);
+            requireCurrent();
+            if (!current.supported) {
+              throw DeviceException(
+                DeviceError.unavailable,
+                '${current.unsupportedReason} Scene not applied.',
+              );
+            }
+            countdownSeconds(endsAt!);
+            if (current.active != null) {
+              final cancelled = await timers.cancelTimer(light.entityId);
+              requireCurrent();
+              if (!cancelled.supported || cancelled.active != null) {
+                throw timerUnconfirmed;
+              }
+              countdownSeconds(endsAt!);
+            }
+          }
+          commandAttempted = true;
           await backend.command(light, command);
+          applied = true;
+          requireCurrent();
           _revisions[light.entityId] = (_revisions[light.entityId] ?? 0) + 1;
           final revision = _revisions[light.entityId] ?? 0;
           final updated = await backend.getLight(light.entityId);
@@ -685,16 +959,53 @@ class AppController extends Notifier<AppState> {
               lights: {...state.lights, updated.entityId: updated},
             );
           }
+          if (needsTimer) {
+            requireCurrent();
+            if (!updated.available || !updated.isOn) {
+              throw const DeviceException(
+                DeviceError.unavailable,
+                'The light did not report being on. Turn-off timer was not set.',
+              );
+            }
+            final status = await (backend as LightTimersRepository).setTimer(
+              light.entityId,
+              endsAt!,
+              on: false,
+            );
+            requireCurrent();
+            final confirmed = status.active;
+            if (!status.supported ||
+                confirmed == null ||
+                confirmed.on ||
+                confirmed.endsAt.difference(endsAt!).inSeconds.abs() > 35) {
+              throw timerUnconfirmed;
+            }
+            timersConfirmed++;
+          }
           succeeded.add(slot.name);
         } catch (error) {
-          failed[slot.name] = userMessage(error);
+          failed[slot.name] =
+              turnOff != null &&
+                  command.service == 'turn_on' &&
+                  commandAttempted
+              ? applied
+                    ? 'Scene applied, but automatic turn-off was not confirmed. ${userMessage(error)} Check Timers before retrying.'
+                    : 'Scene change was not confirmed. Automatic turn-off was not set. ${userMessage(error)} Check this light before retrying.'
+              : userMessage(error);
         }
       }),
     );
     if (!_disposed && generation == _generation) {
       state = state.copyWith(busy: {});
     }
-    return ActionReport(succeeded: succeeded, failed: failed, skipped: skipped);
+    return ActionReport(
+      succeeded: succeeded,
+      failed: failed,
+      skipped: skipped,
+      successVerb: timersConfirmed == 0
+          ? 'updated'
+          : 'updated; $timersConfirmed turn-off ${timersConfirmed == 1 ? 'timer' : 'timers'} confirmed',
+    );
   }
 
   void setDemoAvailability(DeviceSlot slot, bool available) {

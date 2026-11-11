@@ -1,5 +1,50 @@
 import 'light_command.dart';
 import 'light_entity.dart';
+import 'light_timer.dart';
+
+enum SceneOffMode { after, at }
+
+/// A recipe evaluated each time a scene is applied, not a background app alarm.
+class SceneOffSchedule {
+  const SceneOffSchedule.after(this.minutes)
+    : mode = SceneOffMode.after,
+      hour = 0,
+      minute = 0;
+  const SceneOffSchedule.at(this.hour, this.minute)
+    : mode = SceneOffMode.at,
+      minutes = 0;
+  final SceneOffMode mode;
+  final int minutes, hour, minute;
+
+  DateTime resolve(DateTime now) => mode == SceneOffMode.after
+      ? now.add(Duration(minutes: minutes))
+      : nextTimerTime(now, hour, minute);
+
+  Map<String, dynamic> toJson() => mode == SceneOffMode.after
+      ? {'mode': 'after', 'minutes': minutes}
+      : {'mode': 'at', 'hour': hour, 'minute': minute};
+
+  factory SceneOffSchedule.fromJson(Object? raw) {
+    if (raw is Map) {
+      if (raw['mode'] == 'after' &&
+          raw['minutes'] is int &&
+          (raw['minutes'] as int) >= 1 &&
+          (raw['minutes'] as int) <= 1440) {
+        return SceneOffSchedule.after(raw['minutes'] as int);
+      }
+      if (raw['mode'] == 'at' &&
+          raw['hour'] is int &&
+          raw['minute'] is int &&
+          (raw['hour'] as int) >= 0 &&
+          (raw['hour'] as int) < 24 &&
+          (raw['minute'] as int) >= 0 &&
+          (raw['minute'] as int) < 60) {
+        return SceneOffSchedule.at(raw['hour'] as int, raw['minute'] as int);
+      }
+    }
+    throw const FormatException('Invalid scene turn-off time.');
+  }
+}
 
 class LightScene {
   const LightScene(
@@ -7,15 +52,22 @@ class LightScene {
     this.name,
     this.description,
     this.commands, {
-    this.appearance = 'sparkle',
-  });
+    String? appearance,
+    this.turnOff,
+  }) : appearance =
+           appearance ??
+           (id == 'study' || id == 'movie' || id == 'chill' || id == 'sleep'
+               ? id
+               : 'sparkle');
   final String id;
   final String name;
   final String description;
   final Map<String, LightCommand> commands;
   final String appearance;
+  final SceneOffSchedule? turnOff;
   bool get isCustom => id.startsWith('custom-');
-  String get style => isCustom ? appearance : id;
+  String get style => appearance;
+  static const presetIds = {'study', 'movie', 'chill', 'sleep'};
   static const appearances = [
     'sparkle',
     'study',
@@ -31,6 +83,7 @@ class LightScene {
     'name': name,
     'description': description,
     'appearance': appearance,
+    if (turnOff != null) 'turnOff': turnOff!.toJson(),
     'commands': {
       for (final entry in commands.entries)
         entry.key: {
@@ -47,9 +100,12 @@ class LightScene {
     final id = json['id'],
         name = json['name'],
         description = json['description'] ?? '';
-    final appearance = json['appearance'] ?? 'sparkle', raw = json['commands'];
+    final appearance =
+            json['appearance'] ?? (presetIds.contains(id) ? id : 'sparkle'),
+        raw = json['commands'];
     if (id is! String ||
-        !RegExp(r'^custom-[a-zA-Z0-9-]{1,80}$').hasMatch(id) ||
+        (!RegExp(r'^custom-[a-zA-Z0-9-]{1,80}$').hasMatch(id) &&
+            !presetIds.contains(id)) ||
         name is! String ||
         name.trim().isEmpty ||
         name.length > 60 ||
@@ -99,6 +155,9 @@ class LightScene {
       description.trim(),
       Map.unmodifiable(commands),
       appearance: appearance as String,
+      turnOff: json['turnOff'] == null
+          ? null
+          : SceneOffSchedule.fromJson(json['turnOff']),
     );
   }
 

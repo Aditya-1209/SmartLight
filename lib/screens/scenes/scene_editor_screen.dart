@@ -14,6 +14,7 @@ import '../../widgets/common.dart';
 import '../../widgets/scene_card.dart';
 import '../../widgets/scene_summary.dart';
 import '../../widgets/design_assets.dart';
+import '../../widgets/scene_timing.dart';
 
 Future<void> openSceneEditor(
   BuildContext context, {
@@ -132,14 +133,16 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
   bool _saving = false;
   String _expandedId = 'tube1';
   String? _error;
+  SceneOffSchedule? _turnOff;
 
   @override
   void initState() {
     super.initState();
     final scene = widget.scene;
+    _turnOff = scene?.turnOff;
     _expandedId =
         scene?.commands.keys.firstOrNull ?? widget.initialSlotId ?? 'tube1';
-    _id = scene != null && !widget.duplicate && scene.isCustom
+    _id = scene != null && !widget.duplicate
         ? scene.id
         : 'custom-${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
     _name = TextEditingController(
@@ -198,8 +201,11 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
   }
 
   Future<void> _save() async {
-    if (!_form.currentState!.validate() ||
-        _name.text.trim().isEmpty ||
+    if (!_form.currentState!.validate()) {
+      setState(() => _error = 'Check the highlighted fields.');
+      return;
+    }
+    if (_name.text.trim().isEmpty ||
         _name.text.length > 60 ||
         _description.text.length > 160) {
       setState(
@@ -229,6 +235,7 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
               _description.text.trim(),
               commands,
               appearance: _appearance,
+              turnOff: _turnOff,
             ),
           );
       if (!mounted) return;
@@ -242,17 +249,23 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
     }
   }
 
-  LightScene get _preview =>
-      LightScene(_id, _name.text.trim(), _description.text.trim(), {
-        for (final e in _drafts.entries)
-          if (e.value.included) e.key: e.value.command,
-      }, appearance: _appearance);
+  LightScene get _preview => LightScene(
+    _id,
+    _name.text.trim(),
+    _description.text.trim(),
+    {
+      for (final e in _drafts.entries)
+        if (e.value.included) e.key: e.value.command,
+    },
+    appearance: _appearance,
+    turnOff: _turnOff,
+  );
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(appControllerProvider);
     final theme = Theme.of(context), scheme = theme.colorScheme;
-    final editing = widget.scene?.isCustom == true && !widget.duplicate;
+    final editing = widget.scene != null && !widget.duplicate;
     final wide = MediaQuery.sizeOf(context).width >= 1100;
     final form = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -353,6 +366,13 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
           _lightCard(slot.id, slot.name, state.lightFor(slot)),
           const SizedBox(height: 16),
         ],
+        const SizedBox(height: 8),
+        SceneTimingEditor(
+          value: _turnOff,
+          enabled: !_saving,
+          onChanged: (value) => setState(() => _turnOff = value),
+        ),
+        const SizedBox(height: 20),
         if (_error != null)
           Text(_error!, style: TextStyle(color: scheme.error)),
         const SizedBox(height: 12),
@@ -367,14 +387,15 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
           child: Container(
             color: scheme.surfaceContainerLow,
             padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 12,
+              runSpacing: 8,
               children: [
                 OutlinedButton(
                   onPressed: _saving ? null : () => Navigator.of(context).pop(),
                   child: const Text('Cancel'),
                 ),
-                const SizedBox(width: 12),
                 FilledButton.icon(
                   key: const ValueKey('save-scene'),
                   onPressed: _saving ? null : _save,

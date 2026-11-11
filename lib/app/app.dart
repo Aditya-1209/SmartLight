@@ -6,6 +6,7 @@ import '../screens/dashboard/dashboard_screen.dart';
 import '../widgets/design_assets.dart';
 import '../screens/scenes/scenes_screen.dart';
 import '../screens/settings/settings_screen.dart';
+import '../screens/timers/timers_screen.dart';
 import '../services/connection_status.dart';
 import 'theme.dart';
 
@@ -31,7 +32,8 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell>
     with WidgetsBindingObserver {
   int _page = 0;
-  final _scroll = ScrollController();
+  final _pages = PageController();
+  final _scrolls = List.generate(3, (_) => ScrollController());
   static const _labels = ['My room', 'Scenes', 'Settings'];
   static const _icons = ['room', 'scenes', 'settings'];
   @override
@@ -43,7 +45,10 @@ class _AppShellState extends ConsumerState<AppShell>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _scroll.dispose();
+    _pages.dispose();
+    for (final scroll in _scrolls) {
+      scroll.dispose();
+    }
     super.dispose();
   }
 
@@ -59,8 +64,12 @@ class _AppShellState extends ConsumerState<AppShell>
   }
 
   void _select(int page) {
-    setState(() => _page = page);
-    if (_scroll.hasClients) _scroll.jumpTo(0);
+    if (!_pages.hasClients) return;
+    _pages.animateToPage(
+      page,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeInOut,
+    );
   }
 
   @override
@@ -82,14 +91,11 @@ class _AppShellState extends ConsumerState<AppShell>
     }
     final scheme = Theme.of(context).colorScheme;
     final wide = MediaQuery.sizeOf(context).width >= 850;
-    final screen = switch (_page) {
-      0 => DashboardScreen(
-        onSetup: () => _select(2),
-        onScenes: () => _select(1),
-      ),
-      1 => const ScenesScreen(),
-      _ => const SettingsScreen(),
-    };
+    final screens = [
+      DashboardScreen(onSetup: () => _select(2), onScenes: () => _select(1)),
+      const ScenesScreen(),
+      const SettingsScreen(),
+    ];
     return Scaffold(
       bottomNavigationBar: wide
           ? null
@@ -213,6 +219,40 @@ class _AppShellState extends ConsumerState<AppShell>
                 children: [
                   if (state.loading)
                     const LinearProgressIndicator(minHeight: 2),
+                  if (state.timerWarning != null)
+                    Container(
+                      key: const ValueKey('timer-setup-warning'),
+                      width: double.infinity,
+                      color: scheme.errorContainer,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Semantics(
+                            liveRegion: true,
+                            child: Text(state.timerWarning!),
+                          ),
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              TextButton(
+                                onPressed: () => openTimers(context),
+                                child: const Text('Check timers'),
+                              ),
+                              TextButton(
+                                onPressed: ref
+                                    .read(appControllerProvider.notifier)
+                                    .dismissTimerWarning,
+                                child: const Text('Dismiss'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   if (state.error != null)
                     Container(
                       width: double.infinity,
@@ -255,24 +295,35 @@ class _AppShellState extends ConsumerState<AppShell>
                       ),
                     ),
                   Expanded(
-                    child: Scrollbar(
-                      controller: _scroll,
-                      child: SingleChildScrollView(
-                        controller: _scroll,
-                        padding: EdgeInsets.fromLTRB(
-                          wide ? 40 : 20,
-                          wide ? 40 : 24,
-                          wide ? 40 : 20,
-                          28,
-                        ),
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 1200),
-                            child: screen,
+                    child: PageView(
+                      key: const ValueKey('main-pages'),
+                      controller: _pages,
+                      onPageChanged: (page) => setState(() => _page = page),
+                      children: [
+                        for (var i = 0; i < screens.length; i++)
+                          Scrollbar(
+                            controller: _scrolls[i],
+                            child: SingleChildScrollView(
+                              key: PageStorageKey('main-page-$i'),
+                              controller: _scrolls[i],
+                              padding: EdgeInsets.fromLTRB(
+                                wide ? 40 : 20,
+                                wide ? 40 : 24,
+                                wide ? 40 : 20,
+                                28,
+                              ),
+                              child: Align(
+                                alignment: Alignment.topCenter,
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 1200,
+                                  ),
+                                  child: screens[i],
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                      ],
                     ),
                   ),
                 ],

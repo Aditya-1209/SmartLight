@@ -31,6 +31,8 @@ The user confirmed Wipro control on Android after SDK pairing and automatic prot
 
 New Wipro connections use **Auto — test 3.3, 3.4 and 3.5** for the local protocol. With an IP and paired credentials entered, **Test connection** sends only status queries, closes each attempt, and selects the first version that returns a verified, usable light state. **Connect & save** verifies and stores the selected version. Existing saved connections keep their version; Auto remains available in the dropdown. This checks protocols at the entered address, not the whole network, and cannot compensate for a mismatched IP/key. Timeout messages distinguish opening TCP from the session handshake or status request. Pairing can return a cloud/public IP or no IP; only a private LAN address is accepted.
 
+Version 2.6.2 fixes protocol detection stopping after a connected handshake/status timeout when address discovery found no replacement. These timeouts now retain their stage so Auto can continue with the remaining protocols. A genuine TCP connection failure still stops detection. If pairing leaves the address blank, return to the tube's settings and use **Find this tube** below Device ID; it searches separately from pairing. Keep the tube powered and the phone on the home LAN. A public address shown by Wipro is not the light's local address.
+
 ### Pair inside SmartLight on Mac
 
 Mac setup uses Tuya Cloud OpenAPI plus an in-process Dart implementation of Tuya EZ (fast-blinking) provisioning. It does not require a phone, Docker, Home Assistant, Node, Python or a background helper. It currently targets a **Central Europe** Smart Home project and an India (`91`) pseudonymous user profile.

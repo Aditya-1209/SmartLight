@@ -94,8 +94,9 @@ class AutoTuyaClient implements DeviceClient, DeviceTimerClient {
           .map((d) => d.host)
           .toSet();
       if (hosts.length != 1 || hosts.single == config.host) {
-        if (original.kind == DeviceError.unreachable ||
-            original.kind == DeviceError.timeout) {
+        // A handshake/status timeout means TCP connected. Preserve that error
+        // so Auto can try the next protocol instead of treating it as offline.
+        if (original.kind == DeviceError.unreachable) {
           throw const DeviceException(
             DeviceError.unreachable,
             'Tube not found yet. Keep its wall switch on, join the same Wi-Fi and try Refresh after it reconnects. You do not need to factory reset it for an IP change.',

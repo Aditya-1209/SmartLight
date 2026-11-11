@@ -12,6 +12,7 @@ import '../../widgets/light_card.dart';
 import '../../widgets/scene_card.dart';
 import '../device_detail/device_detail_screen.dart';
 import '../timers/timers_screen.dart';
+import '../scenes/room_scenes_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key, required this.onSetup, this.onScenes});
@@ -23,10 +24,10 @@ class DashboardScreen extends ConsumerWidget {
     final state = ref.watch(appControllerProvider);
     final controller = ref.read(appControllerProvider.notifier);
     final theme = Theme.of(context), scheme = theme.colorScheme;
-    final mapped = state.slots
-        .map(state.lightFor)
-        .whereType<LightEntity>()
-        .toList();
+    final bySlot = {
+      for (final slot in state.slots) slot.id: state.lightFor(slot),
+    };
+    final mapped = bySlot.values.whereType<LightEntity>().toList();
     final onCount = mapped.where((l) => l.available && l.isOn).length;
     final connected = mapped.where((l) => l.available).length;
     final enabled = state.configured && state.busy.isEmpty && state.connected;
@@ -37,31 +38,40 @@ class DashboardScreen extends ConsumerWidget {
         ? 0.0
         : dimmable.map((l) => l.brightnessPercent).reduce((a, b) => a + b) /
               dimmable.length;
-    Widget scenes(int count, int columns) => LayoutBuilder(
+    Widget scenes(int? count, int columns) => LayoutBuilder(
       builder: (context, constraints) => Wrap(
         spacing: 16,
         runSpacing: 16,
-        children: state.scenes
-            .take(count)
-            .map(
-              (scene) => SizedBox(
-                width: (constraints.maxWidth - (columns - 1) * 16) / columns,
-                child: SceneCard(
-                  scene: scene,
-                  onTap: enabled
-                      ? () => runAction(context, controller.applyScene(scene))
-                      : null,
-                ),
-              ),
-            )
-            .toList(),
+        children:
+            (count == null ? state.roomScenes : state.roomScenes.take(count))
+                .map(
+                  (scene) => SizedBox(
+                    width:
+                        (constraints.maxWidth - (columns - 1) * 16) / columns,
+                    child: SceneCard(
+                      scene: scene,
+                      onTap: enabled
+                          ? () =>
+                                runAction(context, controller.applyScene(scene))
+                          : null,
+                    ),
+                  ),
+                )
+                .toList(),
       ),
     );
-    Widget title(String label, String? action) => Row(
+    Widget title(String label) => Row(
       children: [
         Expanded(child: Text(label, style: theme.textTheme.titleLarge)),
-        if (action != null)
-          TextButton(onPressed: onScenes, child: Text(action)),
+        TextButton(
+          key: const ValueKey('edit-room-scenes'),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const RoomScenesScreen()),
+          ),
+          child: const Text('Edit'),
+        ),
+        if (onScenes != null)
+          TextButton(onPressed: onScenes, child: const Text('All scenes')),
       ],
     );
     Widget hero(bool wide) => Container(
@@ -113,23 +123,31 @@ class DashboardScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 12),
+          RoomIllustration(
+            generic: state.settings.genericRoomPreview,
+            height: wide ? 260 : 200,
+            tube1: bySlot[state.settings.swapPreviewTubes ? 'tube2' : 'tube1'],
+            tube2: bySlot[state.settings.swapPreviewTubes ? 'tube1' : 'tube2'],
+            strip: bySlot['strip'],
+          ),
+          const SizedBox(height: 12),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${brightness.round()}%',
-                    style: theme.textTheme.displayMedium?.copyWith(
-                      fontSize: wide ? 56 : 40,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Text('$onCount lights on', style: theme.textTheme.bodySmall),
-                ],
+              Text(
+                '${brightness.round()}%',
+                style: theme.textTheme.displayMedium?.copyWith(
+                  fontSize: wide ? 56 : 40,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               const SizedBox(width: 12),
-              Expanded(child: RoomIllustration(height: wide ? 114 : 96)),
+              Flexible(
+                child: Text(
+                  '$onCount lights on',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -346,12 +364,14 @@ class DashboardScreen extends ConsumerWidget {
               },
             ),
             const SizedBox(height: 24),
-            title(
-              wide ? 'A scene for every mood' : 'Set the mood',
-              'All scenes',
-            ),
+            title('Set the mood'),
             const SizedBox(height: 16),
-            scenes(4, constraints.maxWidth >= 650 ? 4 : 2),
+            if (state.roomScenes.isEmpty)
+              const Text(
+                'No scenes selected. Tap Edit to choose your favourites.',
+              )
+            else
+              scenes(null, constraints.maxWidth >= 650 ? 4 : 2),
           ],
         );
       },

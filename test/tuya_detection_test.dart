@@ -135,6 +135,49 @@ void main() {
     },
   );
 
+  test('address recovery preserves connected timeouts so Auto tries later protocols', () async {
+    for (final target in [TuyaVersion.v34, TuyaVersion.v35]) {
+      final clients = <ProbeClient>[];
+      final credentials = MemoryCredentials();
+      final container = ProviderContainer(
+        overrides: [
+          credentialStoreProvider.overrideWithValue(credentials),
+          settingsStoreProvider.overrideWithValue(MemorySettings()),
+          backendFactoryProvider.overrideWithValue(
+            (config, demo) => LocalLightsRepository(
+              config!,
+              tuyaDiscover: () async => [],
+              tuyaClientFactory: (device) {
+                final client = ProbeClient(
+                  device,
+                  device.version == target
+                      ? null
+                      : const TuyaTimeoutException(TuyaConnectionStage.status),
+                );
+                clients.add(client);
+                return client;
+              },
+            ),
+          ),
+        ],
+      );
+      try {
+        final result = await container
+            .read(appControllerProvider.notifier)
+            .detectTuyaProtocol(tube());
+        expect(result.version, target);
+        expect(
+          clients.map((c) => c.config.version),
+          TuyaVersion.values.take(target.index + 1),
+        );
+        expect(clients.every((c) => c.disposed), isTrue);
+        expect(credentials.config, isNull);
+      } finally {
+        container.dispose();
+      }
+    }
+  });
+
   test('network failure and leaving setup stop further attempts', () async {
     for (final unreachable in [true, false]) {
       final clients = <ProbeClient>[];

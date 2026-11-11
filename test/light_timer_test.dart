@@ -56,6 +56,8 @@ class TimerStrip {
   Map? lastAdd;
   bool ignoreWrite = false, loseAcknowledgement = false;
   int errorCode = 0;
+  bool? moduleEnabled;
+  bool disableOnAdd = false;
   TapoClient client() {
     final config = tapoConfig();
     final auth = sha256([
@@ -89,12 +91,19 @@ class TimerStrip {
         final method = data['method'] as String;
         calls.add(method);
         Object result = {};
-        if (method == 'get_countdown_rules') result = {'rule_list': rules};
+        if (method == 'get_countdown_rules') {
+          expect(data['params'], {'start_index': 0});
+          result = {
+            'rule_list': rules,
+            if (moduleEnabled != null) 'enable': moduleEnabled,
+          };
+        }
         if (method == 'remove_countdown_rules' && !ignoreWrite) {
           expect(data['params'], {'remove_all': true});
           rules = [];
         }
         if (method == 'add_countdown_rule') {
+          if (disableOnAdd) moduleEnabled = false;
           lastAdd = data['params'] as Map;
           if (!ignoreWrite) {
             rules = [
@@ -256,6 +265,34 @@ void main() {
     addTearDown(reopened.dispose);
     expect((await reopened.readTimer()).active!.on, false);
     expect((await reopened.cancelTimer()).active, isNull);
+  });
+
+  test('Tapo disabled countdown module never counts as an armed timer or a confirmed write', () async {
+    final strip = TimerStrip()
+      ..moduleEnabled = false
+      ..rules = [
+        {
+          'id': 'disabled',
+          'enable': true,
+          'remain': 900,
+          'desired_states': {'on': false},
+        },
+      ];
+    final client = strip.client();
+    addTearDown(client.dispose);
+    expect((await client.readTimer()).active, isNull);
+    strip.disableOnAdd = true;
+    await expectLater(
+      client.setTimer(
+        DateTime.now().add(const Duration(minutes: 15)),
+        on: false,
+      ),
+      throwsA(same(timerUnconfirmed)),
+    );
+    expect(strip.calls.where((c) => c == 'add_countdown_rule'), hasLength(1));
+    expect((await client.readTimer()).active, isNull);
+    strip.moduleEnabled = true;
+    expect((await client.readTimer()).active?.on, false);
   });
 
   test('Tapo reads legacy action, blocks existing/unknown/multiple timers without writes', () async {

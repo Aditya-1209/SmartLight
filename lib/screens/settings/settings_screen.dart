@@ -122,6 +122,34 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        Card(
+          child: SwitchListTile(
+            key: const ValueKey('generic-room-preview'),
+            secondary: const Icon(Icons.image_outlined),
+            title: const Text('Generic room preview'),
+            subtitle: const Text(
+              'Use the original room illustration instead of a personal render.',
+            ),
+            value: state.settings.genericRoomPreview,
+            onChanged: (value) =>
+                runSetting(context, controller.setGenericRoomPreview(value)),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: SwitchListTile(
+            key: const ValueKey('swap-preview-tubes'),
+            secondary: const Icon(Icons.swap_horiz),
+            title: const Text('Swap tubes in preview'),
+            subtitle: const Text(
+              'Use if the two tubes appear on opposite sides. This only changes the preview.',
+            ),
+            value: state.settings.swapPreviewTubes,
+            onChanged: (value) =>
+                runSetting(context, controller.setPreviewTubesSwapped(value)),
+          ),
+        ),
         const SizedBox(height: 24),
         const SectionCard(
           child: Column(
@@ -159,7 +187,7 @@ class SettingsScreen extends ConsumerWidget {
         const SizedBox(height: 16),
         const AboutListTile(
           applicationName: 'SmartLight',
-          applicationVersion: '2.6.1',
+          applicationVersion: '2.10.0',
           icon: Icon(Icons.info_outline),
         ),
       ],
@@ -169,6 +197,53 @@ class SettingsScreen extends ConsumerWidget {
 
 class ConnectedLightsScreen extends ConsumerWidget {
   const ConnectedLightsScreen({super.key});
+
+  Future<void> _addLight(BuildContext context, WidgetRef ref) async {
+    var name = '';
+    final form = GlobalKey<FormState>();
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add a light'),
+        content: Form(
+          key: form,
+          child: TextFormField(
+            onChanged: (value) => name = value,
+            autofocus: true,
+            maxLength: 80,
+            decoration: const InputDecoration(
+              labelText: 'Light name',
+              hintText: 'Desk light',
+            ),
+            validator: (value) => value == null || value.trim().isEmpty
+                ? 'Enter a name for your light.'
+                : null,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (form.currentState!.validate()) {
+                Navigator.pop(context, name.trim());
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (value != null && context.mounted) {
+      await runSetting(
+        context,
+        ref.read(appControllerProvider.notifier).addLight(value),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(appControllerProvider);
@@ -186,7 +261,21 @@ class ConnectedLightsScreen extends ConsumerWidget {
                   'Your lights',
                   'Keep your lights powered and join the same Wi-Fi.',
                 ),
-                for (final slot in DeviceSlot.defaults) ...[
+                if (state.settings.demo)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 16),
+                    child: Text(
+                      'These are your saved room cards. Demo lights are separate.',
+                    ),
+                  ),
+                if (state.configuredSlots.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 20),
+                    child: Text(
+                      'No lights yet. Add a light to set up this room.',
+                    ),
+                  ),
+                for (final slot in state.configuredSlots) ...[
                   DeviceSetupCard(
                     key: ValueKey('setup-${slot.id}'),
                     slot: slot,
@@ -196,6 +285,19 @@ class ConnectedLightsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
                 ],
+                if (state.configuredSlots.length < 3)
+                  FilledButton.icon(
+                    key: const ValueKey('add-light'),
+                    onPressed: state.busy.isNotEmpty
+                        ? null
+                        : () => _addLight(context, ref),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add a light'),
+                  ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Up to three lights per room. Deleting a card only removes it from this installation of SmartLight; it does not reset the light or cancel its built-in timer.',
+                ),
               ],
             ),
           ),
@@ -230,6 +332,44 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
   bool _autoProtocol = true;
   String? _message;
   String _macAddress = '';
+
+  Future<void> _deleteLight() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete ${widget.saved?.name ?? widget.slot.name}?'),
+        content: const Text(
+          'Remove this card and its saved connection from this device? The physical light and other phones are unchanged. Any timer already running on the light will keep running.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirm != true) return;
+    setState(() => _working = true);
+    try {
+      await ref
+          .read(appControllerProvider.notifier)
+          .deleteLight(widget.slot.id);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _message = userMessage(error);
+          _success = false;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
 
   Future<void> _findTapo() async {
     setState(() {
@@ -572,7 +712,20 @@ class _DeviceSetupCardState extends ConsumerState<DeviceSetupCard> {
             ? Icons.light_outlined
             : Icons.lightbulb_outline,
       ),
-      title: Text(widget.saved?.name ?? widget.slot.name),
+      title: Row(
+        children: [
+          Expanded(child: Text(widget.saved?.name ?? widget.slot.name)),
+          IconButton(
+            key: ValueKey('delete-light-${widget.slot.id}'),
+            tooltip: 'Delete light',
+            onPressed:
+                _working || ref.watch(appControllerProvider).busy.isNotEmpty
+                ? null
+                : _deleteLight,
+            icon: const Icon(Icons.delete_outline),
+          ),
+        ],
+      ),
       subtitle: Text(
         widget.saved == null
             ? 'Not connected · tap to set up'
