@@ -97,20 +97,18 @@ class _ScenesScreenState extends ConsumerState<ScenesScreen> {
                         }
                       },
                       itemBuilder: (_) => [
-                        if (scene.isCustom)
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Text('Edit scene'),
-                          ),
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Text('Edit scene'),
+                        ),
                         const PopupMenuItem(
                           value: 'duplicate',
                           child: Text('Duplicate scene'),
                         ),
-                        if (scene.isCustom)
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Text('Delete scene'),
-                          ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Delete scene'),
+                        ),
                       ],
                     ),
                   ),
@@ -122,7 +120,7 @@ class _ScenesScreenState extends ConsumerState<ScenesScreen> {
     );
     final selected =
         state.scenes.where((s) => s.id == _selectedId).firstOrNull ??
-        state.scenes.first;
+        state.scenes.firstOrNull;
     final collection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -159,7 +157,25 @@ class _ScenesScreenState extends ConsumerState<ScenesScreen> {
         if (_filter != 'My scenes') ...[
           Text('Everyday favourites', style: theme.textTheme.titleLarge),
           const SizedBox(height: 16),
-          grid(LightScene.defaults),
+          if (state.presetScenes.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                'No presets. Create a scene or restore deleted presets below.',
+              ),
+            )
+          else
+            grid(state.presetScenes),
+          if (state.settings.deletedPresetIds.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            TextButton.icon(
+              key: const ValueKey('restore-presets'),
+              onPressed: () =>
+                  runSetting(context, controller.restoreDeletedPresets()),
+              icon: const Icon(Icons.restore),
+              label: const Text('Restore deleted presets'),
+            ),
+          ],
         ],
       ],
     );
@@ -194,7 +210,7 @@ class _ScenesScreenState extends ConsumerState<ScenesScreen> {
               ],
             ),
             const SizedBox(height: 28),
-            if (wide)
+            if (wide && selected != null)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -211,11 +227,7 @@ class _ScenesScreenState extends ConsumerState<ScenesScreen> {
                               controller.applyScene(selected),
                             )
                           : null,
-                      onEdit: () => _edit(
-                        context,
-                        scene: selected,
-                        duplicate: !selected.isCustom,
-                      ),
+                      onEdit: () => _edit(context, scene: selected),
                     ),
                   ),
                 ],

@@ -12,6 +12,8 @@ class AppSettings {
     this.demo = false,
     this.slots = DeviceSlot.defaults,
     this.customScenes = const [],
+    this.presetScenes = const [],
+    this.deletedPresetIds = const [],
     this.roomSceneIds,
     this.swapPreviewTubes = false,
     this.genericRoomPreview = true,
@@ -20,6 +22,8 @@ class AppSettings {
   final bool demo;
   final List<DeviceSlot> slots;
   final List<LightScene> customScenes;
+  final List<LightScene> presetScenes;
+  final List<String> deletedPresetIds;
 
   /// Null keeps the existing first-four default; an empty list hides all.
   final List<String>? roomSceneIds;
@@ -30,6 +34,8 @@ class AppSettings {
     bool? demo,
     List<DeviceSlot>? slots,
     List<LightScene>? customScenes,
+    List<LightScene>? presetScenes,
+    List<String>? deletedPresetIds,
     List<String>? roomSceneIds,
     bool? swapPreviewTubes,
     bool? genericRoomPreview,
@@ -38,6 +44,8 @@ class AppSettings {
     demo: demo ?? this.demo,
     slots: slots ?? this.slots,
     customScenes: customScenes ?? this.customScenes,
+    presetScenes: presetScenes ?? this.presetScenes,
+    deletedPresetIds: deletedPresetIds ?? this.deletedPresetIds,
     roomSceneIds: roomSceneIds ?? this.roomSceneIds,
     swapPreviewTubes: swapPreviewTubes ?? this.swapPreviewTubes,
     genericRoomPreview: genericRoomPreview ?? this.genericRoomPreview,
@@ -47,6 +55,8 @@ class AppSettings {
     'demo': demo,
     'slots': slots.map((s) => s.toJson()).toList(),
     'customScenes': customScenes.map((s) => s.toJson()).toList(),
+    'presetScenes': presetScenes.map((s) => s.toJson()).toList(),
+    'deletedPresetIds': deletedPresetIds,
     if (roomSceneIds != null) 'roomSceneIds': roomSceneIds,
     'swapPreviewTubes': swapPreviewTubes,
     'genericRoomPreview': genericRoomPreview,
@@ -88,14 +98,40 @@ class AppSettings {
         try {
           if (rawScene is! Map<String, dynamic>) continue;
           final scene = LightScene.fromJson(rawScene);
+          if (!scene.isCustom) continue;
           if (!scenes.any((s) => s.id == scene.id)) scenes.add(scene);
         } on FormatException {
           // A damaged scene must not discard the user's other preferences.
         }
       }
     }
+    final presets = <LightScene>[];
+    final rawPresets = json['presetScenes'];
+    if (rawPresets is List) {
+      for (final rawPreset in rawPresets) {
+        try {
+          if (rawPreset is! Map<String, dynamic>) continue;
+          final preset = LightScene.fromJson(rawPreset);
+          if (LightScene.presetIds.contains(preset.id) &&
+              !presets.any((s) => s.id == preset.id)) {
+            presets.add(preset);
+          }
+        } on FormatException {
+          // A damaged override falls back to its original preset.
+        }
+      }
+    }
     return AppSettings(
       customScenes: List.unmodifiable(scenes),
+      presetScenes: List.unmodifiable(presets),
+      deletedPresetIds: json['deletedPresetIds'] is List
+          ? List.unmodifiable(
+              (json['deletedPresetIds'] as List)
+                  .whereType<String>()
+                  .where(LightScene.presetIds.contains)
+                  .toSet(),
+            )
+          : const [],
       swapPreviewTubes: json['swapPreviewTubes'] == true,
       // Keep the personal preview for existing installations; new installs
       // use the original generic illustration unless explicitly changed.

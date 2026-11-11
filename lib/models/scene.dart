@@ -52,9 +52,13 @@ class LightScene {
     this.name,
     this.description,
     this.commands, {
-    this.appearance = 'sparkle',
+    String? appearance,
     this.turnOff,
-  });
+  }) : appearance =
+           appearance ??
+           (id == 'study' || id == 'movie' || id == 'chill' || id == 'sleep'
+               ? id
+               : 'sparkle');
   final String id;
   final String name;
   final String description;
@@ -62,7 +66,8 @@ class LightScene {
   final String appearance;
   final SceneOffSchedule? turnOff;
   bool get isCustom => id.startsWith('custom-');
-  String get style => isCustom ? appearance : id;
+  String get style => appearance;
+  static const presetIds = {'study', 'movie', 'chill', 'sleep'};
   static const appearances = [
     'sparkle',
     'study',
@@ -95,9 +100,12 @@ class LightScene {
     final id = json['id'],
         name = json['name'],
         description = json['description'] ?? '';
-    final appearance = json['appearance'] ?? 'sparkle', raw = json['commands'];
+    final appearance =
+            json['appearance'] ?? (presetIds.contains(id) ? id : 'sparkle'),
+        raw = json['commands'];
     if (id is! String ||
-        !RegExp(r'^custom-[a-zA-Z0-9-]{1,80}$').hasMatch(id) ||
+        (!RegExp(r'^custom-[a-zA-Z0-9-]{1,80}$').hasMatch(id) &&
+            !presetIds.contains(id)) ||
         name is! String ||
         name.trim().isEmpty ||
         name.length > 60 ||

@@ -142,7 +142,7 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
     _turnOff = scene?.turnOff;
     _expandedId =
         scene?.commands.keys.firstOrNull ?? widget.initialSlotId ?? 'tube1';
-    _id = scene != null && !widget.duplicate && scene.isCustom
+    _id = scene != null && !widget.duplicate
         ? scene.id
         : 'custom-${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
     _name = TextEditingController(
@@ -265,7 +265,7 @@ class _SceneEditorScreenState extends ConsumerState<SceneEditorScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(appControllerProvider);
     final theme = Theme.of(context), scheme = theme.colorScheme;
-    final editing = widget.scene?.isCustom == true && !widget.duplicate;
+    final editing = widget.scene != null && !widget.duplicate;
     final wide = MediaQuery.sizeOf(context).width >= 1100;
     final form = Column(
       crossAxisAlignment: CrossAxisAlignment.start,

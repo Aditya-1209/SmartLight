@@ -79,9 +79,12 @@ class AppState {
     );
   }).toList();
   LightEntity? lightFor(DeviceSlot slot) => lights[slot.entityId];
-  List<LightScene> get scenes => [
-    ...settings.customScenes,
-    ...LightScene.defaults,
+  List<LightScene> get scenes => [...settings.customScenes, ...presetScenes];
+  List<LightScene> get presetScenes => [
+    for (final original in LightScene.defaults)
+      if (!settings.deletedPresetIds.contains(original.id))
+        settings.presetScenes.where((s) => s.id == original.id).firstOrNull ??
+            original,
   ];
   List<LightScene> get roomScenes {
     final ids = settings.roomSceneIds;
@@ -681,6 +684,20 @@ class AppController extends Notifier<AppState> {
   Future<void> saveScene(LightScene scene) => _configurationQueue.run(() async {
     await _ensureStorageReady();
     final validated = LightScene.fromJson(scene.toJson());
+    if (!validated.isCustom) {
+      await _writeSceneSettings(
+        state.settings.copyWith(
+          presetScenes: List.unmodifiable([
+            ...state.settings.presetScenes.where((s) => s.id != validated.id),
+            validated,
+          ]),
+          deletedPresetIds: state.settings.deletedPresetIds
+              .where((id) => id != validated.id)
+              .toList(),
+        ),
+      );
+      return;
+    }
     final scenes = [...state.settings.customScenes];
     final index = scenes.indexWhere((s) => s.id == validated.id);
     if (index < 0) {
@@ -718,15 +735,32 @@ class AppController extends Notifier<AppState> {
 
   Future<void> deleteScene(String id) => _configurationQueue.run(() async {
     await _ensureStorageReady();
+    if (LightScene.presetIds.contains(id)) {
+      await _writeSceneSettings(
+        state.settings.copyWith(
+          deletedPresetIds: List.unmodifiable({
+            ...state.settings.deletedPresetIds,
+            id,
+          }),
+        ),
+      );
+      return;
+    }
     await _saveScenes(
       state.settings.customScenes.where((s) => s.id != id).toList(),
     );
   });
 
-  Future<void> _saveScenes(List<LightScene> scenes) async {
-    final settings = state.settings.copyWith(
-      customScenes: List.unmodifiable(scenes),
-    );
+  Future<void> restoreDeletedPresets() => _configurationQueue.run(() async {
+    await _ensureStorageReady();
+    await _writeSceneSettings(state.settings.copyWith(deletedPresetIds: []));
+  });
+
+  Future<void> _saveScenes(List<LightScene> scenes) => _writeSceneSettings(
+    state.settings.copyWith(customScenes: List.unmodifiable(scenes)),
+  );
+
+  Future<void> _writeSceneSettings(AppSettings settings) async {
     try {
       await ref.read(settingsStoreProvider).write(settings);
     } catch (_) {

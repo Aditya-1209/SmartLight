@@ -1,3 +1,9 @@
+## 2026-11-11 — SmartLight 2.10.0 editable/deletable presets
+
+- Built-in presets now use the full scene editor in place, including name, description, appearance, light settings and off timing. Stable preset IDs preserve existing room shortcuts. Explicit Duplicate still creates a custom scene. Overrides and deleted preset IDs are stored separately from custom scenes, without consuming their quota or changing connection/scene formats. Existing preferences migrate with all presets visible and unchanged.
+- Delete is available for both custom scenes and presets. Deleted presets are omitted consistently from Scenes, room shortcuts and the room-scene picker; deletion survives restart. Snackbar Undo restores the edited scene. Restore deleted presets restores hidden presets while retaining their prior edits. Empty collections no longer dereference a missing selected scene on desktop.
+- New checks cover malformed/cross-category preference data, migration, edited names/appearance/timing and room identity, delete/restart/undo/restore, the custom quota, failed preference writes and actual editor/menu/empty-state flows at 360×800 and 1280×900. All **189 tests passed**, formatting and static analysis passed. Native package/install details are tracked in the PR and ignored distribution notes; editing/deleting/restoring scenes sends no physical light commands.
+
 ## 2026-11-11 — SmartLight 2.9.2 Sleep timer handoff
 
 - Reproduced a Sleep-copy regression with a gated backend: after the strip accepted its dim scene settings, a hidden/paused lifecycle event disposed the connection before the native off countdown was written. The new test failed against 2.9.1 and passed after the fix. Android and Mac share the affected controller path. The user confirmed the timed Sleep copy was selected; the separate untimed Mac room shortcut was observed but is not presented as the cause of the phone failure.

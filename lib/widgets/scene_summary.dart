@@ -95,7 +95,7 @@ class SceneSummary extends StatelessWidget {
                 width: double.infinity,
                 child: OutlinedButton(
                   onPressed: onEdit,
-                  child: Text(scene.isCustom ? 'Edit scene' : 'Make a copy'),
+                  child: const Text('Edit scene'),
                 ),
               ),
             ],
