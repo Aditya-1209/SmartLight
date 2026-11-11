@@ -6,6 +6,7 @@ import '../screens/dashboard/dashboard_screen.dart';
 import '../widgets/design_assets.dart';
 import '../screens/scenes/scenes_screen.dart';
 import '../screens/settings/settings_screen.dart';
+import '../screens/timers/timers_screen.dart';
 import '../services/connection_status.dart';
 import 'theme.dart';
 
@@ -218,6 +219,40 @@ class _AppShellState extends ConsumerState<AppShell>
                 children: [
                   if (state.loading)
                     const LinearProgressIndicator(minHeight: 2),
+                  if (state.timerWarning != null)
+                    Container(
+                      key: const ValueKey('timer-setup-warning'),
+                      width: double.infinity,
+                      color: scheme.errorContainer,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Semantics(
+                            liveRegion: true,
+                            child: Text(state.timerWarning!),
+                          ),
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              TextButton(
+                                onPressed: () => openTimers(context),
+                                child: const Text('Check timers'),
+                              ),
+                              TextButton(
+                                onPressed: ref
+                                    .read(appControllerProvider.notifier)
+                                    .dismissTimerWarning,
+                                child: const Text('Dismiss'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   if (state.error != null)
                     Container(
                       width: double.infinity,

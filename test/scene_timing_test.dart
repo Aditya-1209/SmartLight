@@ -27,11 +27,13 @@ class SceneTimerBackend extends DemoLights {
   final unsupported = <String>{};
   final failRead = <String>{}, failSet = <String>{}, failCancel = <String>{};
   bool unconfirmedCancel = false, unconfirmedSet = false;
-  Completer<void>? readGate, setGate;
+  Completer<void>? readGate, setGate, afterCommandGate;
   @override
   Future<void> command(LightEntity light, LightCommand command) async {
     events.add('command:${light.entityId}');
     await super.command(light, command);
+    events.add('applied:${light.entityId}');
+    await afterCommandGate?.future;
   }
 
   @override
@@ -143,6 +145,40 @@ void main() {
     return container;
   }
 
+  test(
+    'locking immediately after Sleep settings still arms the strip off timer',
+    () async {
+      final backend = SceneTimerBackend()..afterCommandGate = Completer<void>();
+      final container = await setup(backend);
+      final controller = container.read(appControllerProvider.notifier);
+      final pending = controller.applyScene(
+        const LightScene('custom-sleep', 'Sleep copy', '', {
+          'tube1': LightCommand(on: false),
+          'tube2': LightCommand(on: false),
+          'strip': LightCommand(
+            brightnessPercent: 5,
+            rgb: RgbColor(255, 45, 15),
+          ),
+        }, turnOff: SceneOffSchedule.after(15)),
+      );
+      while (!backend.events.contains('applied:light.tapo_strip')) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect((await backend.getLight('light.tapo_strip')).isOn, isTrue);
+      await controller.setForeground(false);
+      backend.afterCommandGate!.complete();
+      expect((await pending).hasFailures, isFalse);
+      expect(backend.timers['light.tapo_strip']?.on, isFalse);
+      expect(
+        backend.timers['light.tapo_strip']!.endsAt
+            .difference(DateTime.now())
+            .inSeconds,
+        inInclusiveRange(890, 900),
+      );
+      expect(container.read(appControllerProvider).connected, isFalse);
+    },
+  );
+
   test('saving is inert; applying arms only scene-on lights with one shared deadline', () async {
     final backend = SceneTimerBackend();
     final store = MemorySettings(const AppSettings(demo: true));
@@ -191,7 +227,12 @@ void main() {
           );
       expect(report.hasFailures, false);
       expect(backend.timers, isEmpty);
-      expect(backend.events.where((e) => !e.startsWith('command:')), isEmpty);
+      expect(
+        backend.events.where(
+          (e) => !e.startsWith('command:') && !e.startsWith('applied:'),
+        ),
+        isEmpty,
+      );
     },
   );
 
@@ -287,39 +328,104 @@ void main() {
     },
   );
 
-  test(
-    'busy spans scene plus timer writes; leaving foreground stops later writes',
-    () async {
-      final backend = SceneTimerBackend()..setGate = Completer<void>();
-      final container = await setup(backend);
-      final controller = container.read(appControllerProvider.notifier);
-      final pending = controller.applyScene(timed);
-      while (!backend.events.any((e) => e.startsWith('set:'))) {
-        await Future<void>.delayed(Duration.zero);
-      }
-      expect(container.read(appControllerProvider).busy, isNotEmpty);
-      expect((await controller.applyScene(timed)).hasFailures, true);
-      expect((await controller.cancelLightTimer('tube1')).hasFailures, true);
-      backend.setGate!.complete();
-      expect((await pending).hasFailures, false);
-      final other = SceneTimerBackend()..readGate = Completer<void>();
-      final another = await setup(other);
-      final c = another.read(appControllerProvider.notifier);
-      final interrupted = c.applyScene(timed);
-      while (other.events.isEmpty) {
-        await Future<void>.delayed(Duration.zero);
-      }
-      await c.setForeground(false);
-      other.readGate!.complete();
-      expect((await interrupted).hasFailures, true);
-      expect(
-        other.events.where(
-          (e) => e.startsWith('command:') || e.startsWith('set:'),
+  test('busy spans scene plus timer writes; leaving foreground finishes the native handoff', () async {
+    final backend = SceneTimerBackend()..setGate = Completer<void>();
+    final container = await setup(backend);
+    final controller = container.read(appControllerProvider.notifier);
+    final pending = controller.applyScene(timed);
+    while (!backend.events.any((e) => e.startsWith('set:'))) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    expect(container.read(appControllerProvider).busy, isNotEmpty);
+    expect((await controller.applyScene(timed)).hasFailures, true);
+    expect((await controller.cancelLightTimer('tube1')).hasFailures, true);
+    backend.setGate!.complete();
+    expect((await pending).hasFailures, false);
+    final other = SceneTimerBackend()..readGate = Completer<void>();
+    final another = await setup(other);
+    final c = another.read(appControllerProvider.notifier);
+    final interrupted = c.applyScene(timed);
+    while (other.events.isEmpty) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    await c.setForeground(false);
+    other.readGate!.complete();
+    expect((await interrupted).hasFailures, false);
+    expect(
+      other.events.where(
+        (e) => e.startsWith('command:') || e.startsWith('set:'),
+      ),
+      isNotEmpty,
+    );
+    expect(other.timers.length, 2);
+    expect(another.read(appControllerProvider).connected, false);
+  });
+
+  test('background grace expires without late timer writes, and failure remains visible', () async {
+    final backend = SceneTimerBackend()..afterCommandGate = Completer<void>();
+    final container = ProviderContainer(
+      overrides: [
+        credentialStoreProvider.overrideWithValue(MemoryCredentials()),
+        settingsStoreProvider.overrideWithValue(
+          MemorySettings(const AppSettings(demo: true)),
         ),
-        isEmpty,
-      );
-    },
-  );
+        backendFactoryProvider.overrideWithValue((config, demo) => backend),
+        timerSetupGraceProvider.overrideWithValue(
+          const Duration(milliseconds: 20),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final c = container.read(appControllerProvider.notifier);
+    await c.initialize();
+    final pending = c.applyScene(timed);
+    while (!backend.events.any((e) => e.startsWith('applied:'))) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    await c.setForeground(false);
+    await c.setForeground(
+      false,
+    ); // hidden + paused must not reset the deadline.
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    expect(container.read(appControllerProvider).connected, false);
+    expect(
+      container.read(appControllerProvider).timerWarning,
+      contains('interrupted'),
+    );
+    backend.afterCommandGate!.complete();
+    expect((await pending).hasFailures, true);
+    expect(backend.events.where((e) => e.startsWith('set:')), isEmpty);
+    expect(container.read(appControllerProvider).timerWarning, isNotNull);
+    c.dismissTimerWarning();
+    expect(container.read(appControllerProvider).timerWarning, isNull);
+  });
+
+  test('resuming during handoff retains the operation; disposing always stops later writes', () async {
+    final backend = SceneTimerBackend()..afterCommandGate = Completer<void>();
+    final container = await setup(backend);
+    final c = container.read(appControllerProvider.notifier);
+    final pending = c.applyScene(timed);
+    while (!backend.events.any((e) => e.startsWith('applied:'))) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    await c.setForeground(false);
+    await c.setForeground(true);
+    backend.afterCommandGate!.complete();
+    expect((await pending).hasFailures, false);
+    expect(container.read(appControllerProvider).connected, true);
+    final other = SceneTimerBackend()..afterCommandGate = Completer<void>();
+    final disposed = testContainer(backend: other);
+    final controller = disposed.read(appControllerProvider.notifier);
+    await controller.initialize();
+    final interrupted = controller.applyScene(timed);
+    while (!other.events.any((e) => e.startsWith('applied:'))) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    disposed.dispose();
+    other.afterCommandGate!.complete();
+    expect((await interrupted).hasFailures, true);
+    expect(other.events.where((e) => e.startsWith('set:')), isEmpty);
+  });
 
   test(
     'untimed scenes do not inspect or alter timers through the timer API',
@@ -335,7 +441,12 @@ void main() {
             .hasFailures,
         false,
       );
-      expect(backend.events.every((e) => e.startsWith('command:')), true);
+      expect(
+        backend.events.every(
+          (e) => e.startsWith('command:') || e.startsWith('applied:'),
+        ),
+        true,
+      );
     },
   );
 

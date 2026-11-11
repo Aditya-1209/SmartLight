@@ -38,6 +38,9 @@ final backendFactoryProvider = Provider<BackendFactory>(
 final appControllerProvider = NotifierProvider<AppController, AppState>(
   AppController.new,
 );
+final timerSetupGraceProvider = Provider<Duration>(
+  (ref) => const Duration(seconds: 30),
+);
 
 class AppState {
   const AppState({
@@ -50,6 +53,7 @@ class AppState {
     this.realtime = ConnectionStatus.disconnected,
     this.lastRefresh,
     this.error,
+    this.timerWarning,
   });
   final AppSettings settings;
   final ConnectionConfig? config;
@@ -60,6 +64,7 @@ class AppState {
   final ConnectionStatus realtime;
   final DateTime? lastRefresh;
   final String? error;
+  final String? timerWarning;
   bool get configured => settings.demo || (config?.devices.isNotEmpty ?? false);
   List<DeviceSlot> get slots =>
       settings.demo ? DeviceSlot.demo : configuredSlots;
@@ -99,6 +104,8 @@ class AppState {
     DateTime? lastRefresh,
     String? error,
     bool clearError = false,
+    String? timerWarning,
+    bool clearTimerWarning = false,
   }) => AppState(
     settings: settings ?? this.settings,
     config: config ?? this.config,
@@ -109,6 +116,7 @@ class AppState {
     realtime: realtime ?? this.realtime,
     lastRefresh: lastRefresh ?? this.lastRefresh,
     error: clearError ? null : error ?? this.error,
+    timerWarning: clearTimerWarning ? null : timerWarning ?? this.timerWarning,
   );
 }
 
@@ -140,6 +148,8 @@ class AppController extends Notifier<AppState> {
   int _generation = 0;
   bool _disposed = false;
   bool _foreground = true;
+  int _pendingTimerSetups = 0;
+  Timer? _backgroundDisconnect;
   Future<void>? _initialization;
   bool _storageReady = false;
   final Map<String, int> _revisions = {};
@@ -190,6 +200,8 @@ class AppController extends Notifier<AppState> {
 
   void _detach() {
     ++_generation;
+    _backgroundDisconnect?.cancel();
+    _backgroundDisconnect = null;
     _fallbackRefresh?.cancel();
     unawaited(_updates?.cancel());
     unawaited(_statuses?.cancel());
@@ -267,6 +279,7 @@ class AppController extends Notifier<AppState> {
       settings: state.settings,
       config: state.config,
       loading: true,
+      timerWarning: state.timerWarning,
     );
     _updates = backend.updates.listen((light) {
       if (_disposed || generation != _generation) return;
@@ -283,10 +296,15 @@ class AppController extends Notifier<AppState> {
       );
     });
     backend.start();
-    _fallbackRefresh = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (state.busy.isEmpty) unawaited(refresh());
-    });
+    _startRefresh();
     await refresh(force: true);
+  }
+
+  void _startRefresh() {
+    _fallbackRefresh?.cancel();
+    _fallbackRefresh = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (_foreground && state.busy.isEmpty) unawaited(refresh());
+    });
   }
 
   Future<void> refresh({bool force = false}) async {
@@ -565,15 +583,66 @@ class AppController extends Notifier<AppState> {
     if (_disposed) return;
     _foreground = foreground;
     if (foreground) {
-      if (_backend == null && state.configured) await _attach();
+      _backgroundDisconnect?.cancel();
+      _backgroundDisconnect = null;
+      if (_backend == null && state.configured) {
+        await _attach();
+      } else if (_backend != null) {
+        _startRefresh();
+      }
     } else {
-      _detach();
-      state = state.copyWith(
-        loading: false,
-        connected: false,
-        busy: {},
-        realtime: ConnectionStatus.disconnected,
-      );
+      _fallbackRefresh?.cancel();
+      if (_pendingTimerSetups > 0 && _backend != null) {
+        // Finish the already-requested native countdown before releasing its
+        // socket. Hidden/paused events often arrive as soon as Sleep is tapped.
+        // This is a bounded handoff, never an app-side 15-minute alarm.
+        _backgroundDisconnect ??= Timer(ref.read(timerSetupGraceProvider), () {
+          if (_disposed || _foreground) return;
+          state = state.copyWith(
+            timerWarning: 'Timer setup was interrupted before it could be confirmed. Check Timers & schedules before relying on automatic turn-off.',
+          );
+          _suspendConnections();
+        });
+      } else {
+        _suspendConnections();
+      }
+    }
+  }
+
+  void _suspendConnections() {
+    _detach();
+    state = state.copyWith(
+      loading: false,
+      connected: false,
+      busy: {},
+      realtime: ConnectionStatus.disconnected,
+    );
+  }
+
+  void dismissTimerWarning() {
+    state = state.copyWith(clearTimerWarning: true);
+  }
+
+  Future<ActionReport> _finishTimerSetup(
+    Future<ActionReport> Function() action,
+  ) async {
+    _pendingTimerSetups++;
+    try {
+      final report = await action();
+      if (!_disposed) {
+        state = state.copyWith(
+          timerWarning: report.hasFailures
+              ? 'Timer setup needs attention: ${report.message}'
+              : null,
+          clearTimerWarning: !report.hasFailures,
+        );
+      }
+      return report;
+    } finally {
+      _pendingTimerSetups--;
+      if (!_disposed && !_foreground && _pendingTimerSetups == 0) {
+        _suspendConnections();
+      }
     }
   }
 
@@ -673,8 +742,9 @@ class AppController extends Notifier<AppState> {
       _run({slot.id: command});
   Future<ActionReport> controlAll(LightCommand command) =>
       _run({for (final s in state.slots) s.id: command}, skipUnsupported: true);
-  Future<ActionReport> applyScene(LightScene scene) =>
-      _run(scene.commands, turnOff: scene.turnOff);
+  Future<ActionReport> applyScene(LightScene scene) => scene.turnOff == null
+      ? _run(scene.commands)
+      : _finishTimerSetup(() => _run(scene.commands, turnOff: scene.turnOff));
 
   Future<LightTimerStatus> readTimer(String slotId) async {
     final backend = _backend;
@@ -692,9 +762,10 @@ class AppController extends Notifier<AppState> {
     Set<String> slotIds,
     DateTime endsAt, {
     required bool on,
-  }) => _runTimers(slotIds, endsAt: endsAt, on: on);
+  }) => _finishTimerSetup(() => _runTimers(slotIds, endsAt: endsAt, on: on));
 
-  Future<ActionReport> cancelLightTimer(String slotId) => _runTimers({slotId});
+  Future<ActionReport> cancelLightTimer(String slotId) =>
+      _finishTimerSetup(() => _runTimers({slotId}));
 
   Future<ActionReport> _runTimers(
     Set<String> slotIds, {
@@ -867,6 +938,7 @@ class AppController extends Notifier<AppState> {
               endsAt!,
               on: false,
             );
+            requireCurrent();
             final confirmed = status.active;
             if (!status.supported ||
                 confirmed == null ||

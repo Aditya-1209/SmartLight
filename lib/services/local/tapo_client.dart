@@ -459,7 +459,7 @@ class TapoClient implements DeviceClient, DeviceTimerClient {
       });
 
   Future<LightTimerStatus> _readTimer() async {
-    final data = await _request('get_countdown_rules', {});
+    final data = await _request('get_countdown_rules', {'start_index': 0});
     final rules = data['rule_list'];
     if (rules is! List || rules.length > 1) {
       throw const DeviceException(
@@ -468,8 +468,14 @@ class TapoClient implements DeviceClient, DeviceTimerClient {
       );
     }
     LightTimer? active;
+    final enabled = data['enable'];
+    if (enabled != null && enabled is! bool && enabled != 0 && enabled != 1) {
+      throw timerUnconfirmed;
+    }
     for (final raw in rules) {
       if (raw is! Map) throw timerUnconfirmed;
+      // A stored rule is not armed when the device's countdown module is off.
+      if (enabled == false || enabled == 0) continue;
       if (raw['enable'] == false || raw['enable'] == 0) continue;
       final remaining = raw['remain'];
       if (remaining == 0) continue;
